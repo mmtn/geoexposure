@@ -21,60 +21,46 @@ class Settings:
         # etc.
     ]
 
-    spatial_data = {
-        "land": SpatialData(
-            file="data/gis/Pepey_Land/Pepey_Land.shp",
-            crs=32648,
-            metrics=[
-                Proximity(column="LU", value="forest")
-                # SpatialMetric.FRAGMENTATION: ("forest", "LU"),
-            ]
-        ),
-        "water": SpatialData(
-            file="data/gis/Pepey_Water/Pepey_Water.shp",
-            crs=32648,
-            metrics=[
-                Proximity()
-                # SpatialMetric.FRAGMENTATION: "water"
-            ]
-        )
+    spatial_data_land = SpatialData(
+        file="data/gis/Pepey_Land/Pepey_Land.shp",
+        crs=32648,
+        metrics=[
+            Proximity(column="LU", value="forest")
+            # SpatialMetric.FRAGMENTATION: ("forest", "LU"),
+        ]
+    )
+    spatial_data_water, = SpatialData(
+        file="data/gis/Pepey_Water/Pepey_Water.shp",
+        crs=32648,
+        metrics=[
+            Proximity()
+            # SpatialMetric.FRAGMENTATION: "water"
+        ]
+    )
+
+    spatial_data_dict = {
+        "land": spatial_data_land,
+        "water": spatial_data_water,
     }
 
     primary_spatial_data = "land"
 
+    hourly_biting_data = pd.read_csv("data/boyer_biting_hours/average.csv")["rate"].values
     temporal_data = {
         "hourly": TemporalData(
-            data=pd.read_csv("data/boyer_biting_hours/average.csv")["rate"].values,
-            data_type=float,
-            timestamps=HOURLY,
+            time_data_dict={
+                timestamp: value
+                for timestamp, value in zip(HOURLY, hourly_biting_data)
+            },
             cycle_duration=dt.timedelta(days=1),
             temporal_resolution=dt.timedelta(hours=1),
             temporal_type=TemporalType.CYCLIC
             ),
         "test": TemporalData(
-            data=[
-                SpatialData(
-                    file="data/gis/Pepey_Land/Pepey_Land.shp",
-                    crs=32648,
-                    metrics=[
-                        Proximity(column="LU", value="forest")
-                        # SpatialMetric.FRAGMENTATION: ("forest", "LU"),
-                    ]
-                ),
-                SpatialData(
-                    file="data/gis/Pepey_Water/Pepey_Water.shp",
-                    crs=32648,
-                    metrics=[
-                        Proximity()
-                        # SpatialMetric.FRAGMENTATION: "water"
-                    ]
-                )
-            ],
-            data_type=SpatialData,
-            timestamps=[
-                dt.time(hour=0),
-                dt.time(hour=12),
-            ],
+            time_data_dict={
+                dt.time(hour=0): spatial_data_land,
+                dt.time(hour=12): spatial_data_water,
+            },
             cycle_duration=dt.timedelta(days=1),
             temporal_resolution=dt.timedelta(hours=12),
             temporal_type=TemporalType.CYCLIC,

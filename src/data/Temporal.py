@@ -1,35 +1,31 @@
 import datetime as dt
 
 from src.Enums import TemporalType
+from src.data.Spatial import SpatialData
 from src.utils import REFERENCE_TIME, check_iter_types, round_datetime
 
 
 class TemporalData:
     def __init__(
             self,
-            data,
-            data_type,
-            timestamps,
+            time_data_dict,
             cycle_duration=None,
             temporal_resolution=None,
             temporal_type=None
     ):
         # Initial default settings
-        self._map = dict()
-        self.data_type = None
+        self.timestamps = time_data_dict.keys()
+        self.data = time_data_dict.values()
         self.timestamp_type = None
+        self.data_type = None
+        self._set_timestamp_type()
+        self._set_data_type()
+        self._map = time_data_dict
 
         # Set from arguments
-        self.data = data
-        self.timestamps = timestamps
         self.cycle_duration = cycle_duration
         self.temporal_resolution = temporal_resolution
         self.temporal_type = temporal_type
-
-        # Process inputs
-        self._set_data_type()
-        self._set_timestamp_type()
-        self._build_map()
 
     def sample(self, timestamp, to="nearest"):
         # TODO: method to interpolate between elements
@@ -54,30 +50,24 @@ class TemporalData:
             raise ValueError(f"unknown timestamp type: {self.timestamp_type}")
         return timestamp_cyclic
 
-    def _build_map(self):
-        # TODO: make TemporalData.__init__() argument a dict so this isn't necessary
-        if len(self.data) != len(self.timestamps):
-            raise ValueError("'data' and 'timestamps' must have equal lengths")
-
-        self._map = {
-            t: d
-            for t, d in zip(self.timestamps, self.data)
-        }
-
     def _get_value_by_key(self, timestamp):
         try:
             return self._map[timestamp]
         except:
-            raise ValueError(f"No data at datetime {timestamp}")
+            raise ValueError(f"No data at timestamp {timestamp}")
 
     def _set_data_type(self):
         data_type = type(self.data[0])
-        if not check_iter_types(self.data, data_type):
-            raise ValueError("all elements of 'data' must have same type")
+        if not data_type == float and not data_type == SpatialData:
+            raise TypeError(
+                "values in 'time_data_dict' must have type 'float' or 'SpatialData'"
+            )
+        if not check_iter_types(self.time_data_dict, data_type):
+            raise ValueError("all values of 'time_data_dict' must have same type")
         self.data_type = data_type
 
     def _set_timestamp_type(self):
         data_type = type(self.timestamps[0])
         if not check_iter_types(self.timestamps, data_type):
-            raise ValueError("all elements of 'timestamps' must have same type")
+            raise ValueError("all keys of 'time_data_dict' must have same type")
         self.timestamp_type = data_type

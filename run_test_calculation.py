@@ -14,7 +14,7 @@ trajectories = mobility.resample(trajectories, settings=Settings.interpolation)
 
 environment = Environment(
     primary_spatial_data="land",
-    spatial_data=Settings.spatial_data,
+    spatial_data=Settings.spatial_data_dict,
     spatial_resolution=500,  # metres
     temporal_data=Settings.temporal_data,
     temporal_resolution=10,  # minutes
