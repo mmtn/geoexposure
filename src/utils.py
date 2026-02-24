@@ -145,3 +145,49 @@ def raster(gdf, pixel_size_metres):
     ]
 
     return gpd.GeoDataFrame(geometry=raster_list, crs=gdf.crs)
+
+
+def match_datetime_in_list(target, sorted_datetimes, cycle=None, to="nearest"):
+    first = sorted_datetimes[0]
+    last = sorted_datetimes[-1]
+
+    if cycle is not None:
+        dt_cycle = first + cycle
+        sorted_datetimes.append(dt_cycle)
+
+    i = bisect.bisect_left(sorted_datetimes, target)
+
+    if to == "floor":
+        if target < first:
+            raise ValueError(f"no datetime <= target: {target}")
+        elif i < len(sorted_datetimes) and target == sorted_datetimes[i]:
+            result = sorted_datetimes[i]
+        else:
+            result = sorted_datetimes[i - 1]
+
+    elif to == "ceil":
+        if target > last:
+            raise ValueError(f"no datetime >= target: {target}")
+        else:
+            result = sorted_datetimes[i]
+
+    elif to == "nearest":
+        if i == 0:
+            result = first
+        elif i == len(sorted_datetimes):
+            result = last
+        else:
+            before = sorted_datetimes[i - 1]
+            after = sorted_datetimes[i]
+            if target - before <= after - target:
+                result = before
+            else:
+                result = after
+
+    else:
+        ValueError(f"unknown rounding method: {to}")
+
+    if cycle is not None and result == dt_cycle:
+        result = first
+
+    return result
