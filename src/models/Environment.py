@@ -1,32 +1,26 @@
 import numpy as np
 
 from src.data.Spatial import SpatialData
-from src.utils import raster
+from src.utils import get_cyclic_timestamp, raster
 
 
 class Environment:
+    EXPOSURE_COLUMN = "exposure"
+
     def __init__(
             self,
             spatial_resolution,
-            temporal_resolution,
             spatial_data: dict = None,
             temporal_data: dict = None,
-            primary_spatial_data=None
+            spatial_data_ref=None
     ):
         self.spatial_data = spatial_data
         self.temporal_data = temporal_data
         self.spatial_resolution = spatial_resolution
-        self.temporal_resolution = temporal_resolution
-        self.primary_spatial_data = primary_spatial_data
-
+        self.spatial_data_ref = spatial_data_ref
         self.gdf_raster = self._calculate_raster()
-        self.calculated = False
-
-    def metric_names(self):
-        all_metrics = list()
-        for name, data in self.spatial_data.items():
-            [all_metrics.append(f"{name}_{metric.name}") for metric in data.metrics]
-        return all_metrics
+        self._calculated = False
+        self._set_temporal_resolution()
 
     def save(self, filename):
         # TODO: implement Environment.save()
@@ -39,54 +33,85 @@ class Environment:
     def calculate(self):
         # Populate DataFrame with unique land/metric ids
         for name, data in self.spatial_data.items():
-            self._add_metrics_to_gdf(data, name)
+            data.calculate(self.gdf_raster)
 
-        # TODO: test this loop
-        # TODO: check metric names are unique
-        for name, data in self.temporal_data.items():
-            if data.data_type is SpatialData:
-                self._add_metrics_to_gdf(data, name)
+        for name, temporal in self.temporal_data.items():
+            if temporal.data_type is not SpatialData:
+                continue
+            for ii, spatial in enumerate(temporal.data):
+                # TODO: set this as an object property to avoid duplicating this logic
+                spatial.calculate(self.gdf_raster)
+                # prefix = f"{name}_{ii:03d}"
+                # self._add_metrics_to_gdf(spatial, prefix)
 
-        self.calculated = True
+        self._calculated = True
 
-    def sample(self, timestamp):
-        # TODO: handle temporally placed spatial layers
-        # TODO: handle end time where window spans multiple temporal data objects
-        if not self.calculated:
-            print("run calculate() method before sample()")
+    def sample(self, timestamp, to="nearest"):
+        """
 
-        if self.temporal_data is None:
-            scaling = 1.0
-        else:
-            scale_factors = [
-                data.sample(timestamp)
-                for data in self.temporal_data.values()
-                if data.temporal_type == float
-            ]
-            scaling = np.prod(scale_factors)
+        :param timestamp:
+        :param to:
+        :return:
+        """
+        if not self._calculated:
+            print("run 'calculate()' before 'sample()'")
 
-        # TODO: replace magic 'exposure' string
+        # Create new GeoDataFrame with zero exposure
         gdf_sample = self.gdf_raster.copy()
-        gdf_sample["exposure"] = 0.0
+        gdf_sample[self.EXPOSURE_COLUMN] = 0.0
 
-        # TODO: access metrics at specific times
-        for metric in self.metric_names():
-            gdf_sample["exposure"] += self.gdf_raster[metric]
+        # Add all metrics from spatial only metrics
+        for key, spatial in self.spatial_data.items():
+            for metric in spatial.metrics:
+                gdf_sample[self.EXPOSURE_COLUMN] += spatial.gdf_metrics[metric.name]
 
-        gdf_sample["exposure"] *= scaling
+        # Add spatial metrics at given timestamp
+        for key, temporal in self.temporal_data.items():
+            if temporal.data_type is not SpatialData:
+                continue
+            spatial = temporal.sample(timestamp, to=to)
+            for metric in spatial.metrics:
+                gdf_sample[self.EXPOSURE_COLUMN] += spatial.gdf_metrics[metric.name]
 
-        return gdf_sample[["geometry", "exposure"]]
+        # Scale by any time dependent factors
+        gdf_sample[self.EXPOSURE_COLUMN] *= self._scaling_factors(timestamp, to=to)
+
+        return gdf_sample[["geometry", self.EXPOSURE_COLUMN]]
+
+    def _scaling_factors(self, timestamp, to="nearest") -> float:
+        if self.temporal_data is None:
+            return 1.0
+        elif all(d.data_type is SpatialData for d in self.temporal_data.values()):
+            return 1.0
+        else:
+            scaling_factors = [
+                temporal.sample(timestamp, to=to)
+                for temporal in self.temporal_data.values()
+                if temporal.data_type == float
+            ]
+            return np.prod(scaling_factors)
 
     def _add_metrics_to_gdf(self, data, name):
         for metric in data.metrics:
             result = metric.calculate(data.gdf, self.gdf_raster)
             column_name = f"{name}_{metric.name}"
+            if column_name in self.gdf_raster.columns:
+                raise ValueError(f"column {column_name} already present")
             self.gdf_raster[column_name] = result
 
     def _calculate_raster(self):
-        if self.primary_spatial_data not in self.spatial_data.keys():
-            raise ValueError()
         return raster(
-            self.spatial_data[self.primary_spatial_data].gdf,
+            self.spatial_data_ref.gdf,
             self.spatial_resolution
         )
+
+    def _set_temporal_resolution(self):
+        if self.temporal_data is None:
+            self.temporal_resolution = None
+        else:
+            self.temporal_resolution = np.min(
+                [
+                    data.temporal_resolution
+                    for data in self.temporal_data.values()
+                ]
+            )

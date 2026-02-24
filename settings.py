@@ -29,7 +29,7 @@ class Settings:
             # SpatialMetric.FRAGMENTATION: ("forest", "LU"),
         ]
     )
-    spatial_data_water, = SpatialData(
+    spatial_data_water = SpatialData(
         file="data/gis/Pepey_Water/Pepey_Water.shp",
         crs=32648,
         metrics=[
@@ -43,7 +43,7 @@ class Settings:
         "water": spatial_data_water,
     }
 
-    primary_spatial_data = "land"
+    spatial_data_ref = spatial_data_land
 
     hourly_biting_data = pd.read_csv("data/boyer_biting_hours/average.csv")["rate"].values
     temporal_data = {

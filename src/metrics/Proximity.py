@@ -1,3 +1,4 @@
+import geopandas as gpd
 import pandas as pd
 
 from src.metrics.Metric import Metric
@@ -11,7 +12,7 @@ class Proximity(Metric):
         self.value = value
         self.name = metric_name("proximity", (self.column, self.value))
 
-    def calculate(self, gdf_spatial, gdf_raster):
+    def _calculate_metric(self, gdf_input, gdf_raster):
         # TODO: turn proximity into something that can be summed with other exposures
         def get_geometry(gdf):
             if isinstance(gdf, pd.DataFrame):
@@ -24,9 +25,9 @@ class Proximity(Metric):
                 )
 
         if self.column is not None and self.value is not None:
-            to_gdf = gdf_spatial[gdf_spatial[self.column] == self.value]
+            to_gdf = gdf_input[gdf_input[self.column] == self.value]
         else:
-            to_gdf = gdf_spatial
+            to_gdf = gdf_input
 
         to_geom = get_geometry(to_gdf)
         from_geom = get_geometry(gdf_raster)
@@ -39,4 +40,5 @@ class Proximity(Metric):
             distance = min(point.distance(to_geom.iloc[idx[0]]) for idx in nearest)
             min_distances.append(distance)
 
-        return pd.Series(min_distances)
+        self.data = pd.Series(min_distances)
+        self._calculated = True

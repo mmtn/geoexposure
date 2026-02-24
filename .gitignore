@@ -1,3 +1,9 @@
+# Python files
+**/__pycache__
 .idea
 .venv
+
+# Data directories
 /data
+tests/data/gis
+tests/data/trajectories

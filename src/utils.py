@@ -18,7 +18,6 @@ REFERENCE_TIME = dt.datetime(
     microsecond=0
 )
 
-
 HOURLY = [
     dt.time(hour=h)
     for h in range(24)
@@ -62,37 +61,25 @@ def nearest_window_cyclic(timestamp, window_starts, cycle_duration):
 def round_datetime(timestamp, delta, to="nearest"):
     """
     Round a datetime to a multiple of a timedelta.
-    Args:
-        timestamp (dt.datetime): The datetime to round (aware or naive).
-        delta (dt.timedelta): The increment to round to (e.g. timedelta(minutes=15)).
-        to (str): 'nearest', 'floor', or 'ceil'.
-    Returns:
-        datetime: Rounded datetime (same tzinfo as input).
-    """
 
-    # Time since "anchor" (midnight) in seconds
-    anchor = timestamp.replace(
-        year=2020,
-        month=1,
-        day=1,
-        hour=0,
-        minute=0,
-        second=0,
-        microsecond=0
-    )
-    seconds = (timestamp - anchor).total_seconds()
-    step = delta.total_seconds()
+    :param timestamp: the datetime to round
+    :param delta: increment to round to (e.g. dt.timedelta(minutes=15))
+    :param to: 'nearest', 'floor', or 'ceil'
+    :return: rounded datetime.
+    """
+    time_seconds = (timestamp - REFERENCE_TIME).total_seconds()
+    delta_seconds = delta.total_seconds()
 
     if to == "nearest":
-        rounded = round(seconds / step) * step
+        rounded = round(time_seconds / delta_seconds) * delta_seconds
     elif to == "floor":
-        rounded = (seconds // step) * step
+        rounded = (time_seconds // delta_seconds) * delta_seconds
     elif to == "ceil":
-        rounded = -(-seconds // step) * step  # ceiling division
+        rounded = -(-time_seconds // delta_seconds) * delta_seconds
     else:
-        raise ValueError("to must be 'nearest', 'floor', or 'ceil'")
+        raise ValueError("'to' must be 'nearest', 'floor', or 'ceil'")
 
-    return anchor + dt.timedelta(seconds=rounded)
+    return REFERENCE_TIME + dt.timedelta(seconds=rounded)
 
 
 def get_times(start_time, end_time, delta):
@@ -145,6 +132,43 @@ def raster(gdf, pixel_size_metres):
     ]
 
     return gpd.GeoDataFrame(geometry=raster_list, crs=gdf.crs)
+
+
+def get_cyclic_timestamp(dt_object):
+    """
+    dt.time objects assume daily cycle
+    dt.date objects assume yearly cycle
+    dt.datetime objects: assume yearly cycle
+
+    :param dt_object:
+    :return:
+    """
+    # TODO: test TemporalData.get_cyclic_timestamp()
+    # TODO: match/strip some elements of datetime before match
+    if isinstance(dt_object, dt.time):
+        ts = REFERENCE_TIME.replace(
+            hour=dt_object.hour,
+            minute=dt_object.minute,
+            second=dt_object.second
+        )
+    elif isinstance(dt_object, dt.date):
+        ts = REFERENCE_TIME.replace(
+            year=REFERENCE_TIME.year,
+            month=dt_object.month,
+            day=dt_object.day
+        )
+    elif isinstance(dt_object, dt.datetime):
+        ts = REFERENCE_TIME.replace(
+            year=REFERENCE_TIME.year,
+            month=dt_object.month,
+            day=dt_object.day,
+            hour=dt_object.hour,
+            minute=dt_object.minute,
+            second=dt_object.second
+        )
+    else:
+        raise ValueError(f"unknown timestamp type: {type(dt_object)}")
+    return ts
 
 
 def match_datetime_in_list(target, sorted_datetimes, cycle=None, to="nearest"):
