@@ -1,14 +1,13 @@
 import datetime as dt
 
+import matplotlib.pyplot as plt
+
 from settings_debug import Settings
-from src.data import mobility
-from src.models.Mobility import Mobility
-from src.models.Environment import Environment
-from src.models.Exposure import exposure
+from src import Environment, Mobility, calculate_exposure, utils
 
 #
 
-trajectories = mobility.load(Settings.mobility_data_path)
+trajectories = utils.read_csv_directory(Settings.mobility_data_path)
 
 #
 
@@ -22,8 +21,6 @@ environment.calculate()
 
 #
 
-import matplotlib.pyplot as plt
-
 gdf = environment.sample(dt.time(hour=0, minute=0))
 gdf.plot("exposure")
 plt.show()
@@ -36,25 +33,16 @@ gdf = environment.sample(dt.time(hour=1, minute=0))
 gdf.plot("exposure")
 plt.show()
 
-# #
 #
-# mobility = Mobility(
-#     method="KDE",
-#     normalisation=True,
-# )
+
+mobility = Mobility(
+    method="KDE",
+    normalisation=True,
+)
+
 #
-# #
-#
-# trajectories = trajectories[0:2]
-#
-# # TODO: create trajectory data specifically for testing
-#
-# exposures = [
-#     exposure(
-#         trajectory,
-#         mobility,
-#         environment,
-#         temporal_resolution=environment.temporal_resolution
-#     )
-#     for trajectory in trajectories
-# ]
+
+exposures = [
+    calculate_exposure(trajectory, mobility, environment)
+    for trajectory in trajectories
+]

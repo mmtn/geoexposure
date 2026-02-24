@@ -1,6 +1,6 @@
 import numpy as np
 
-from src.data.Spatial import SpatialData
+from src.data.SpatialData import SpatialData
 from src.utils import get_cyclic_timestamp, raster
 
 

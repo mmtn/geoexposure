@@ -2,11 +2,9 @@ import datetime as dt
 
 import pandas as pd
 
-from src.Enums import SpatialMetric, TemporalType
-from src.data.Temporal import TemporalData
-from src.data.Spatial import SpatialData
-from src.metrics.Proximity import Proximity
-from src.utils import HOURLY, MONTHLY
+from src import SpatialData, TemporalData, Proximity
+from src.Enums import TemporalType
+from src.utils import HOURLY
 
 
 class Settings:

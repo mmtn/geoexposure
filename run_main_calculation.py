@@ -1,14 +1,9 @@
 from settings import Settings
-from src.data import mobility
-from src.models.Mobility import Mobility
-from src.models.Environment import Environment
-from src.models.Exposure import exposure
+from src import calculate_exposure, Mobility, Environment, utils
 
 #
 
-trajectories = mobility.load(Settings.mobility_data_path)
-trajectories = mobility.apply_filters(trajectories, filters=Settings.mobility_filters)
-trajectories = mobility.resample(trajectories, settings=Settings.interpolation)
+trajectories = utils.read_csv_directory(Settings.mobility_data_path)
 
 #
 
@@ -30,7 +25,7 @@ mobility = Mobility(
 #
 
 exposures = [
-    exposure(
+    calculate_exposure(
         trajectory,
         mobility,
         environment,

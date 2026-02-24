@@ -1,7 +1,7 @@
 import numpy as np
 
 from src.Enums import TemporalType
-from src.data.Spatial import SpatialData
+from src.data.SpatialData import SpatialData
 from src.utils import (check_iter_types, get_cyclic_timestamp,
                        match_datetime_in_list, round_datetime)
 

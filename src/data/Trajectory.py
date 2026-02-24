@@ -13,3 +13,13 @@ class Trajectory:
             "DataFrame must have columns 'datetime', 'latitude', 'longitude'"
         df["datetime"] = pd.to_datetime(df["datetime"], format="%Y-%m-%d %H:%M:%S")
         self.data = df
+
+    def resample(self, settings):
+        """
+
+        :param trajectories:
+        :param settings:
+        :return:
+        """
+        # TODO: implement mobility.resample()
+        raise NotImplementedError()

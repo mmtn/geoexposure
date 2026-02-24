@@ -1,9 +1,4 @@
-from enum import Enum, StrEnum
-
-
-class SpatialMetric(StrEnum):
-    PROXIMITY = "proximity"
-    FRAGMENTATION = "fragmentation"
+from enum import Enum
 
 
 class TemporalType(Enum):

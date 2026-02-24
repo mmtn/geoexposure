@@ -6,7 +6,7 @@ from matplotlib import pyplot as plt
 from src import utils
 
 
-def exposure(
+def calculate_exposure(
         trajectory,
         mobility,
         environment,

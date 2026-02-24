@@ -1,12 +1,7 @@
 import datetime as dt
 
-import pandas as pd
-
-from src.Enums import SpatialMetric, TemporalType
-from src.data.Temporal import TemporalData
-from src.data.Spatial import SpatialData
-from src.metrics.Proximity import Proximity
-from src.utils import HOURLY, MONTHLY
+from src import Proximity, SpatialData, TemporalData
+from src.Enums import TemporalType
 
 
 class Settings:
@@ -24,7 +19,7 @@ class Settings:
     )
     fields = SpatialData(
         "tests/data/gis/fields/fields.shp",
-        metrics = [Proximity("land_use", "fields")]
+        metrics=[Proximity("land_use", "fields")]
     )
     plantations = SpatialData(
         "tests/data/gis/plantations/plantations.shp",
