@@ -1,3 +1,4 @@
+import datetime as dt
 import numpy as np
 
 from src.Enums import TemporalType
@@ -16,30 +17,31 @@ class TemporalData:
     ):
         # Set from arguments
         # TODO: ensure times are sorted before assigning
-        self.timestamps = list(time_data_dict.keys())
-        self.data = list(time_data_dict.values())
         self.cycle_duration = cycle_duration
         self.temporal_resolution = temporal_resolution
         self.temporal_type = temporal_type
+        self._create_dict(time_data_dict)
 
         # Initialise variables
         self.timestamp_type = None
         self.data_type = None
 
-        self._arg_check()
-
         self._set_timestamp_type()
         self._set_data_type()
-        self._timestamps_to_datetime()
         self._set_temporal_resolution()
-        self._create_map()
+        self._arg_check()
 
     def _arg_check(self):
         if len(self.data) <= 1:
             raise ValueError("multiple time points must be provided for TemporalData")
 
-        if self.cycle_duration is None and self.temporal_type is TemporalType.CYCLIC:
+        if self.temporal_type is TemporalType.CYCLIC and self.cycle_duration is None:
             raise ValueError("cycle duration must be defined for TemporalType.CYCLIC")
+
+        if self.temporal_type is TemporalType.DATED and self.timestamp_type is dt.datetime:
+            raise ValueError(
+                "'time_data_dict' keys must be dt.datetime for TemporalType.DATED"
+                )
 
     def sample(self, datetime, to="nearest"):
         # TODO: method to interpolate between values/SpatialData objects
@@ -55,15 +57,16 @@ class TemporalData:
 
     def _get_value_by_key(self, timestamp):
         try:
-            return self._map[timestamp]
+            return self._dict[timestamp]
         except:
             raise ValueError(f"no data at timestamp {timestamp}")
 
     def _set_timestamp_type(self):
         first_timestamp = self.timestamps[0]
-        if not check_iter_types(self.timestamps, type(first_timestamp)):
+        first_type = type(first_timestamp)
+        if not check_iter_types(self.timestamps, first_type):
             raise ValueError("all keys of 'time_data_dict' must have same type")
-        self.timestamp_type = type(first_timestamp)
+        self.timestamp_type = first_type
 
     def _set_data_type(self):
         first_value = self.data[0]
@@ -96,8 +99,15 @@ class TemporalData:
         else:
             raise ValueError(f"unknown TemporalType: {self.temporal_type}")
 
-    def _create_map(self):
-        self._map = {
+    def _create_dict(self, time_data_dict):
+        timestamps_in = list(time_data_dict.keys())
+        data_in = list(time_data_dict.values())
+        sorting = np.argsort(timestamps_in)
+
+        self.timestamps = [timestamps_in[ii] for ii in sorting]
+        self.data = [data_in[ii] for ii in sorting]
+        self._timestamps_to_datetime()
+        self._dict = {
             key: value
             for key, value in zip(self._datetime, self.data)
         }

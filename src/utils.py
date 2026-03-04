@@ -92,6 +92,14 @@ def get_times(start_time, end_time, delta):
     num_times = int((end_new - start_new) / delta)
     return [start_new + (ii * delta) for ii in range(num_times)]
 
+def get_time_windows(start_time, end_time, delta):
+    start_new = round_datetime(start_time, delta, to="floor")
+    end_new = round_datetime(end_time, delta, to="ceil")
+    num_times = int((end_new - start_new) / delta)
+    return [
+        (start_new + (ii * delta), start_new + ((ii + 1) * delta))
+        for ii in range(num_times - 1)
+    ]
 
 def check_iter_types(iterable, data_type):
     return all(isinstance(item, data_type) for item in iterable)
@@ -249,3 +257,10 @@ def read_csv_directory(data_directory):
         Trajectory(pd.read_csv(csv))
         for csv in csv_files
     ]
+
+
+def get_gdf_centroids(gdf, bounds=None):
+    if bounds is not None:
+        gdf = gdf.clip(bounds)
+    points = [geom.centroid for geom in gdf.geometry]
+    return np.array([[point.x, point.y] for point in points])
