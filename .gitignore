@@ -5,5 +5,5 @@
 
 # Data directories
 /data
-tests/data/gis
-tests/data/trajectories
+src/tests/data/gis
+src/tests/data/trajectories

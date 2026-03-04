@@ -36,7 +36,7 @@ def get_xyt(
 
     while True:
         x_ii = (ii * x_movement) + x_start
-        y_ii = (ii * y_movement) + x_start
+        y_ii = (ii * y_movement) + y_start
         current_time += frequency
         if (current_time > end_time) or (ii > max_entries) or (x_ii > max_x_value):
             break
@@ -81,5 +81,5 @@ low_freq_df = get_xyt(
     x_max,
 )
 
-high_freq_df.to_csv("data/trajectories/high_frequency.csv", index=False)
-low_freq_df.to_csv("data/trajectories/low_frequency.csv", index=False)
+high_freq_df.to_csv("trajectories/high_frequency.csv", index=False)
+low_freq_df.to_csv("trajectories/low_frequency.csv", index=False)

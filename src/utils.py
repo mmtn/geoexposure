@@ -175,50 +175,62 @@ def get_cyclic_timestamp(dt_object):
     return ts
 
 
-def match_datetime_in_list(target, sorted_datetimes, cycle=None, to="nearest"):
-    first = sorted_datetimes[0]
-    last = sorted_datetimes[-1]
+def match_datetime_in_list(target, datetime_list, cycle=None, to="nearest"):
+    sorted_list = sorted(datetime_list)
+    if sorted_list != datetime_list:
+        raise RuntimeError("'datetime_list' must be sorted")
+
+    first = sorted_list[0]
+    last = sorted_list[-1]
+
+    if cycle is None and (target < first or target > last):
+        raise ValueError(f"target datetime outside listed values: {target} {cycle}")
 
     if cycle is not None:
-        dt_cycle = first + cycle
-        sorted_datetimes.append(dt_cycle)
+        last = first + cycle
+        sorted_list.append(last)
+        # Move target into appropriate range of values
+        while target < first:
+            target += cycle
+        while target > last:
+            target -= cycle
 
-    i = bisect.bisect_left(sorted_datetimes, target)
+    index = bisect.bisect_left(sorted_list, target)
 
     if to == "floor":
         if target < first:
             raise ValueError(f"no datetime <= target: {target}")
-        elif i < len(sorted_datetimes) and target == sorted_datetimes[i]:
-            result = sorted_datetimes[i]
+        elif index < len(sorted_list) and target == sorted_list[index]:
+            match = sorted_list[index]
         else:
-            result = sorted_datetimes[i - 1]
+            match = sorted_list[index - 1]
 
     elif to == "ceil":
         if target > last:
             raise ValueError(f"no datetime >= target: {target}")
         else:
-            result = sorted_datetimes[i]
+            match = sorted_list[index]
 
     elif to == "nearest":
-        if i == 0:
-            result = first
-        elif i == len(sorted_datetimes):
-            result = last
+        if index == 0:
+            match = first
+        elif index == len(sorted_list):
+            match = last
         else:
-            before = sorted_datetimes[i - 1]
-            after = sorted_datetimes[i]
+            before = sorted_list[index - 1]
+            after = sorted_list[index]
             if target - before <= after - target:
-                result = before
+                match = before
             else:
-                result = after
+                match = after
 
     else:
         ValueError(f"unknown rounding method: {to}")
 
-    if cycle is not None and result == dt_cycle:
-        result = first
+    if cycle is not None and match == last:
+        match = first
 
-    return result
+    return match
 
 
 def read_csv_directory(data_directory):
