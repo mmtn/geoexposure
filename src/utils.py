@@ -1,4 +1,5 @@
 import bisect
+import calendar
 import datetime as dt
 import os
 from collections import abc
@@ -146,40 +147,59 @@ def raster(gdf, pixel_size_metres):
     return gpd.GeoDataFrame(geometry=raster_list, crs=gdf.crs)
 
 
-def get_cyclic_timestamp(dt_object):
+def get_cyclic_timestamp(dt_input, cycle_duration):
     """
     dt.time objects assume daily cycle
     dt.date objects assume yearly cycle
     dt.datetime objects: assume yearly cycle
 
-    :param dt_object:
+    :param dt_input:
     :return:
     """
-    # TODO: test TemporalData.get_cyclic_timestamp()
-    # TODO: match/strip some elements of datetime before match
-    if isinstance(dt_object, dt.time):
+    if cycle_duration.total_seconds() <= 0:
+        raise ValueError("cycle duration must be greater than 0")
+
+
+
+    if isinstance(dt_input, dt.time):
         ts = REFERENCE_TIME.replace(
-            hour=dt_object.hour,
-            minute=dt_object.minute,
-            second=dt_object.second
+            hour=dt_input.hour,
+            minute=dt_input.minute,
+            second=dt_input.second
         )
-    elif isinstance(dt_object, dt.date):
+
+    elif isinstance(dt_input, dt.date) and not isinstance(dt_input, dt.datetime):
+        day = dt_input.day
+
+        # Clamp Feb 29 to Feb 28 if the reference year is not a leap year
+        if dt_input.month == 2 and day == 29 and not calendar.isleap(
+                REFERENCE_TIME.year
+                ):
+            day = 28
+
         ts = REFERENCE_TIME.replace(
-            year=REFERENCE_TIME.year,
-            month=dt_object.month,
-            day=dt_object.day
+            month=dt_input.month,
+            day=day
         )
-    elif isinstance(dt_object, dt.datetime):
+
+    elif isinstance(dt_input, dt.datetime):
         ts = REFERENCE_TIME.replace(
-            year=REFERENCE_TIME.year,
-            month=dt_object.month,
-            day=dt_object.day,
-            hour=dt_object.hour,
-            minute=dt_object.minute,
-            second=dt_object.second
+            month=dt_input.month,
+            day=dt_input.day,
+            hour=dt_input.hour,
+            minute=dt_input.minute,
+            second=dt_input.second
         )
+
     else:
-        raise ValueError(f"unknown timestamp type: {type(dt_object)}")
+        raise ValueError(f"unknown timestamp type: {type(dt_input)}")
+
+    while ts < REFERENCE_TIME:
+        ts += cycle_duration
+
+    while ts >= (REFERENCE_TIME + cycle_duration):
+        ts -= cycle_duration
+
     return ts
 
 

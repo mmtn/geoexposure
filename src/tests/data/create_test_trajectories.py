@@ -17,6 +17,8 @@ and Environment
 """
 
 import datetime as dt
+
+import numpy as np
 import pandas as pd
 
 
@@ -27,7 +29,7 @@ def get_xyt(
         movement_speed,
         max_x_value,
         max_entries=1e6
-        ):
+):
     x, y, t = list(), list(), list()
     x_movement = movement_speed * frequency.seconds
     y_movement = 0.0
@@ -81,5 +83,15 @@ low_freq_df = get_xyt(
     x_max,
 )
 
-high_freq_df.to_csv("trajectories/high_frequency.csv", index=False)
-low_freq_df.to_csv("trajectories/low_frequency.csv", index=False)
+total_entries = len(high_freq_df)
+proportion_to_drop = 0.5
+removal_indices = np.random.choice(
+    range(total_entries),
+    int(np.ceil(total_entries * proportion_to_drop)),
+    replace=False
+)
+inconsistent_frequency_df = high_freq_df.copy().drop(removal_indices)
+
+high_freq_df.to_csv("trajectories/02_high_frequency.csv", index=False)
+inconsistent_frequency_df.to_csv("trajectories/01_inconsistent_frequency.csv", index=False)
+low_freq_df.to_csv("trajectories/03_low_frequency.csv", index=False)
