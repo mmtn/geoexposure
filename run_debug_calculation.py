@@ -18,20 +18,25 @@ side_by_side = SpatialData(
 )
 forest = SpatialData(
     "src/tests/data/gis/forest/forest.shp",
-    metrics=[ProximityRisk("land_use", "forest", 500)]
+    metrics={
+        ProximityRisk("land_use", "forest", 500): 1.0
+    }
 )
 fields = SpatialData(
     "src/tests/data/gis/fields/fields.shp",
-    metrics=[ProximityRisk("land_use", "fields", 500)]
-)
+    metrics={
+        ProximityRisk("land_use", "fields", 500): 1.0
+    })
 plantations = SpatialData(
     "src/tests/data/gis/plantations/plantations.shp",
-    metrics=[ProximityRisk("land_use", "plantations", 500)]
-)
+    metrics={
+        ProximityRisk("land_use", "plantations", 500): 1.0
+    })
 built_up = SpatialData(
     "src/tests/data/gis/built-up/built-up.shp",
-    metrics=[ProximityRisk("land_use", "built-up", 500)]
-)
+    metrics={
+        ProximityRisk("land_use", "built-up", 500): 1.0
+    })
 
 spatial_data = {
     "side_by_side": side_by_side,
@@ -100,5 +105,3 @@ long_window = calculate_exposure(
     mobility,
     environment,
 )
-
-print("pause")

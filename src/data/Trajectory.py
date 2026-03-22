@@ -84,6 +84,9 @@ class Trajectory:
                 f"{out_of_bounds.sum()} time(s) are outside the trajectory bounds "
                 f"[{t_min}, {t_max}] and will be ignored."
             )
+            for ii, t in enumerate(out_of_bounds):
+                if t:
+                    warnings.warn(f"[out of bounds {ii + 1}] {times[ii]}")
             times = times[~out_of_bounds].reset_index(drop=True)
 
         if method == "nearest":

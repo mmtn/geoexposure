@@ -94,14 +94,6 @@ class Environment:
             ]
             return np.prod(scaling_factors)
 
-    def _add_metrics_to_gdf(self, data, name):
-        for metric in data.metrics:
-            result = metric.calculate(data.gdf, self.gdf_raster)
-            column_name = f"{name}_{metric.name}"
-            if column_name in self.gdf_raster.columns:
-                raise ValueError(f"column {column_name} already present")
-            self.gdf_raster[column_name] = result
-
     def _calculate_raster(self):
         return raster(
             self.spatial_data_ref.gdf,
