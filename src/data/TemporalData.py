@@ -3,11 +3,17 @@ import numpy as np
 
 from src.Enums import TemporalType
 from src.data.SpatialData import SpatialData
+
 from src.utils import (check_iter_types, get_cyclic_timestamp,
                        match_datetime_in_list, round_datetime)
 
 
 class TemporalData:
+    VALID_TYPES = (
+        float,
+        SpatialData
+    )
+
     def __init__(
             self,
             time_data_dict,
@@ -16,7 +22,6 @@ class TemporalData:
             temporal_type=None
     ):
         # Set from arguments
-        # TODO: ensure times are sorted before assigning
         self.cycle_duration = cycle_duration
         self.temporal_resolution = temporal_resolution
         self.temporal_type = temporal_type
@@ -31,6 +36,14 @@ class TemporalData:
         self._set_temporal_resolution()
         self._arg_check()
 
+    @property
+    def min_time(self):
+        return np.array(list(self._dict.keys())).min()
+
+    @property
+    def max_time(self):
+        return np.array(list(self._dict.keys())).max()
+
     def _arg_check(self):
         if len(self.data) <= 1:
             raise ValueError("multiple time points must be provided for TemporalData")
@@ -41,19 +54,24 @@ class TemporalData:
         if self.temporal_type is TemporalType.DATED and self.timestamp_type is dt.datetime:
             raise ValueError(
                 "'time_data_dict' keys must be dt.datetime for TemporalType.DATED"
-                )
+            )
 
-    def sample(self, datetime, to="nearest"):
-        # TODO: method to interpolate between values/SpatialData objects
+    def sample(self, timestamp, method="nearest"):
         if self.temporal_type is TemporalType.CYCLIC:
-            datetime = get_cyclic_timestamp(datetime)
-        dt_nearest = match_datetime_in_list(
-            datetime,
-            self._datetime,
-            self.cycle_duration,
-            to=to
-        )
-        return self._get_value_by_key(dt_nearest)
+            timestamp = get_cyclic_timestamp(timestamp, self.cycle_duration)
+
+        if method == "nearest":
+            dt_nearest = match_datetime_in_list(
+                timestamp,
+                self._datetime,
+                self.cycle_duration,
+                to=method
+            )
+            return self._get_value_by_key(dt_nearest)
+        elif method == "interp":
+            return self._get_value_interpolated(timestamp)
+        else:
+            raise ValueError(f"unknown sample method: {method}")
 
     def _get_value_by_key(self, timestamp):
         try:
@@ -70,7 +88,7 @@ class TemporalData:
 
     def _set_data_type(self):
         first_value = self.data[0]
-        if not isinstance(first_value, (float, SpatialData)):
+        if not isinstance(first_value, self.VALID_TYPES):
             raise TypeError(
                 "values in 'time_data_dict' must have type 'float' or 'SpatialData'"
             )
@@ -91,7 +109,7 @@ class TemporalData:
     def _timestamps_to_datetime(self):
         if self.temporal_type == TemporalType.CYCLIC:
             self._datetime = [
-                get_cyclic_timestamp(ts)
+                get_cyclic_timestamp(ts, self.cycle_duration)
                 for ts in self.timestamps
             ]
         elif self.temporal_type == TemporalType.DATED:
@@ -111,3 +129,35 @@ class TemporalData:
             key: value
             for key, value in zip(self._datetime, self.data)
         }
+
+    def _get_value_interpolated(self, datetime):
+        dt_previous = match_datetime_in_list(
+            datetime,
+            self._datetime,
+            self.cycle_duration,
+            to="floor"
+        )
+        dt_next = match_datetime_in_list(
+            datetime,
+            self._datetime,
+            self.cycle_duration,
+            to="ceil"
+        )
+        prev_value = self._get_value_by_key(dt_previous)
+        next_value = self._get_value_by_key(dt_next)
+
+        if prev_value == next_value:
+            return prev_value
+
+        to_previous = abs(datetime - dt_previous)
+        time_diff = abs(dt_next - dt_previous)
+        loc = to_previous / time_diff
+
+        if self.data_type is float:
+            total_diff = next_value - prev_value
+            interpolated = prev_value + (loc * total_diff)
+
+        if self.data_type is SpatialData:
+            interpolated = prev_value.interpolate(next_value, loc=loc)
+
+        return interpolated

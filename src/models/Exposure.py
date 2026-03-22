@@ -12,7 +12,8 @@ def calculate_exposure(
         environment,
         start_time=None,
         end_time=None,
-        temporal_resolution=None
+        temporal_resolution=None,
+        env_sampling_method="interp",
 ):
     if start_time is None:
         start_time = trajectory.data["datetime"].min()
@@ -26,21 +27,23 @@ def calculate_exposure(
     else:
         temporal_resolution = min(temporal_resolution, environment.temporal_resolution)
 
-    delta = dt.timedelta(minutes=temporal_resolution)
-    times = utils.get_times(start_time, end_time, delta)
+    print(f"Computing exposure between {start_time} and {end_time}")
+    print(f"Temporal resolution: {temporal_resolution}")
 
-    exposures = list()
-    for time in times:
-        env = environment.sample(time)
-        env.plot("exposure")
-        print(env)
-        break
+    windows = utils.get_time_windows(start_time, end_time, temporal_resolution)
+    exposures = np.zeros(len(windows))
+    durations = np.zeros(len(windows))
 
-        # aggregate = trajectory.aggregate(time, time + delta)
-        # rho = mobility(aggregate)
-        # exposure_step = rho * env
-        # exposures.append(exposure_step)
+    for ii, (start, end) in enumerate(windows):
+        window = trajectory.data_in_window(start, end)
+        length = end - start
+        durations[ii] = length.total_seconds()
 
-    plt.show()
+        center = start + length / 2
+        env = environment.sample(center, method=env_sampling_method)
+        rho = mobility.distribution(window, environment.gdf_raster)
+        exposure = env.exposure * rho.density / rho.density.sum()
+        exposures[ii] = exposure.sum()
 
-    return np.array(exposures)
+    print("Complete")
+    return np.array(exposures * durations)

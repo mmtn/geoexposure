@@ -12,12 +12,12 @@ class Environment:
             spatial_resolution,
             spatial_data: dict = None,
             temporal_data: dict = None,
-            spatial_data_ref=None
+            spatial_reference_data=None
     ):
         self.spatial_data = spatial_data
         self.temporal_data = temporal_data
         self.spatial_resolution = spatial_resolution
-        self.spatial_data_ref = spatial_data_ref
+        self.spatial_data_ref = spatial_reference_data
         self.gdf_raster = self._calculate_raster()
         self._calculated = False
         self._set_temporal_resolution()
@@ -46,11 +46,11 @@ class Environment:
 
         self._calculated = True
 
-    def sample(self, timestamp, to="nearest"):
+    def sample(self, timestamp, method="nearest"):
         """
 
         :param timestamp:
-        :param to:
+        :param method:
         :return:
         """
         if not self._calculated:
@@ -69,23 +69,26 @@ class Environment:
         for key, temporal in self.temporal_data.items():
             if temporal.data_type is not SpatialData:
                 continue
-            spatial = temporal.sample(timestamp, to=to)
+            spatial = temporal.sample(timestamp, method=method)
             for metric in spatial.metrics:
                 gdf_sample[self.EXPOSURE_COLUMN] += spatial.gdf_metrics[metric.name]
 
         # Scale by any time dependent factors
-        gdf_sample[self.EXPOSURE_COLUMN] *= self._scaling_factors(timestamp, to=to)
+        gdf_sample[self.EXPOSURE_COLUMN] *= self._scaling_factors(
+            timestamp,
+            method=method
+        )
 
         return gdf_sample[["geometry", self.EXPOSURE_COLUMN]]
 
-    def _scaling_factors(self, timestamp, to="nearest") -> float:
+    def _scaling_factors(self, timestamp, method="nearest") -> float:
         if self.temporal_data is None:
             return 1.0
         elif all(d.data_type is SpatialData for d in self.temporal_data.values()):
             return 1.0
         else:
             scaling_factors = [
-                temporal.sample(timestamp, to=to)
+                temporal.sample(timestamp, method=method)
                 for temporal in self.temporal_data.values()
                 if temporal.data_type == float
             ]

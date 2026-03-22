@@ -2,7 +2,8 @@ import datetime as dt
 
 import matplotlib.pyplot as plt
 
-from src import Environment, Mobility, calculate_exposure, utils, SpatialData, Proximity, TemporalData
+from src import (Environment, Mobility, calculate_exposure, utils, SpatialData,
+                 Proximity, TemporalData)
 from src.Enums import TemporalType
 from src.metrics.Proximity import ProximityRisk
 from src.models.KDE import KDE
@@ -60,14 +61,22 @@ temporal_data = {
     )
 }
 
-
+#
+# Read generated data
+#
+mobility_data_path = "src/tests/data/trajectories"
 trajectories = utils.read_csv_directory(mobility_data_path)
+
+for t in trajectories:
+    times = get_times(t.start_time, t.end_time, dt.timedelta(minutes=30))
+    resampled = t.resample(times, "nearest")
+
 
 #
 
 environment = Environment(
     spatial_data=spatial_data,
-    spatial_data_ref=side_by_side,
+    spatial_reference_data=side_by_side,
     spatial_resolution=50,  # metres
     temporal_data=temporal_data,
 )
@@ -79,7 +88,17 @@ mobility = KDE(kernel="gaussian", bandwidth=200)
 
 #
 
-exposures = [
-    calculate_exposure(trajectory, mobility, environment)
-    for trajectory in trajectories
-]
+short_window = calculate_exposure(
+    trajectories[0],
+    mobility,
+    environment,
+    temporal_resolution=dt.timedelta(minutes=15)
+)
+
+long_window = calculate_exposure(
+    trajectories[0],
+    mobility,
+    environment,
+)
+
+print("pause")
