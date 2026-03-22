@@ -4,37 +4,36 @@ import matplotlib.pyplot as plt
 
 from src import Environment, Mobility, calculate_exposure, utils, SpatialData, Proximity, TemporalData
 from src.Enums import TemporalType
+from src.metrics.Proximity import ProximityRisk
 from src.models.KDE import KDE
+from src.utils import get_times
 
 #
-# Generated data
-mobility_data_path = "src/tests/data/trajectories"
-
 # Generated geometries
+#
 side_by_side = SpatialData(
     "src/tests/data/gis/side_by_side/side_by_side.shp",
     # metrics=[Proximity("land_use", "forest")]
 )
 forest = SpatialData(
     "src/tests/data/gis/forest/forest.shp",
-    metrics=[Proximity("land_use", "forest")]
+    metrics=[ProximityRisk("land_use", "forest", 500)]
 )
 fields = SpatialData(
     "src/tests/data/gis/fields/fields.shp",
-    metrics=[Proximity("land_use", "fields")]
+    metrics=[ProximityRisk("land_use", "fields", 500)]
 )
 plantations = SpatialData(
     "src/tests/data/gis/plantations/plantations.shp",
-    metrics=[Proximity("land_use", "plantations")]
+    metrics=[ProximityRisk("land_use", "plantations", 500)]
 )
 built_up = SpatialData(
     "src/tests/data/gis/built-up/built-up.shp",
-    metrics=[Proximity("land_use", "built-up")]
+    metrics=[ProximityRisk("land_use", "built-up", 500)]
 )
 
 spatial_data = {
     "side_by_side": side_by_side,
-    # "forest": forest,
 }
 
 temporal_data = {
@@ -48,7 +47,7 @@ temporal_data = {
         cycle_duration=dt.timedelta(hours=4, minutes=00),
         temporal_type=TemporalType.CYCLIC,
     ),
-    "high_frequency": TemporalData(
+    "spatial_data": TemporalData(
         time_data_dict={
             dt.time(hour=0, minute=0): forest,
             dt.time(hour=0, minute=30): fields,

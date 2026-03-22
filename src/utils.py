@@ -284,3 +284,46 @@ def get_gdf_centroids(gdf, bounds=None):
         gdf = gdf.clip(bounds)
     points = [geom.centroid for geom in gdf.geometry]
     return np.array([[point.x, point.y] for point in points])
+
+
+def calculate_gdf_proximity(gdf_from, gdf_to):
+    if not all(isinstance(x, gpd.GeoDataFrame) for x in (gdf_from, gdf_to)):
+        ValueError("Inputs must be GeoDataFrames with 'geometry' column")
+
+    to_geom = gdf_to.geometry
+    from_geom = gdf_from.geometry
+
+    spatial_index = to_geom.sindex  # R-tree spatial index for fast lookup
+    min_distances = []
+
+    for point in from_geom:
+        nearest = list(spatial_index.nearest(point, return_all=True))
+        distance = min(point.distance(to_geom.iloc[idx[0]]) for idx in nearest)
+        min_distances.append(distance)
+
+    return min_distances
+
+
+def proximity_to_risk(distances, threshold, shape=4.0):
+    d = np.asarray(distances, dtype=float)
+
+    if threshold < 0:
+        raise ValueError("threshold must be >= 0")
+
+    if shape <= 0:
+        raise ValueError("shape must be > 0")
+
+    if threshold == 0:
+        risk = np.zeros_like(d, dtype=float)
+        risk[d == 0] = 1.0
+        return risk
+
+    x = np.clip(d / threshold, 0.0, 1.0) # Normalise distance to [0, 1]
+
+    # Normalised exponential decay: 1 at x=0, 0 at x=1
+    exp_neg_shape = np.exp(-shape)
+    risk = (np.exp(-shape * x) - exp_neg_shape) / (1.0 - exp_neg_shape)
+
+    # Explicitly zero out anything beyond the threshold
+    risk[d > threshold] = 0.0
+    return risk

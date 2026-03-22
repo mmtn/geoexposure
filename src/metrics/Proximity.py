@@ -1,44 +1,50 @@
-import geopandas as gpd
 import pandas as pd
 
 from src.metrics.Metric import Metric
-from src.utils import metric_name
+from src.utils import calculate_gdf_proximity, metric_name, proximity_to_risk
 
 
 class Proximity(Metric):
+    NAME = "proximity"
+
     def __init__(self, column=None, value=None):
         super().__init__()
         self.column = column
         self.value = value
-        self.name = metric_name("proximity", (self.column, self.value))
+        self.name = metric_name(self.NAME, (self.column, self.value))
 
     def _calculate_metric(self, gdf_input, gdf_raster):
-        # TODO: turn proximity into something that can be summed with other exposures
-        def get_geometry(gdf):
-            if isinstance(gdf, pd.DataFrame):
-                return gdf["geometry"]
-            elif isinstance(gdf, pd.Series):
-                return gdf
-            else:
-                raise ValueError(
-                    "Inputs must be Series, or DataFrame with 'geometry' column"
-                )
-
         if self.column is not None and self.value is not None:
-            to_gdf = gdf_input[gdf_input[self.column] == self.value]
+            gdf_to = gdf_input[gdf_input[self.column] == self.value]
         else:
-            to_gdf = gdf_input
+            gdf_to = gdf_input
 
-        to_geom = get_geometry(to_gdf)
-        from_geom = get_geometry(gdf_raster)
+        gdf_from = gdf_raster
+        proximity = calculate_gdf_proximity(gdf_from, gdf_to)
 
-        spatial_index = to_geom.sindex  # R-tree spatial index for fast lookup
-        min_distances = []
+        self.data = pd.Series(proximity)
+        self._calculated = True
 
-        for point in from_geom:
-            nearest = list(spatial_index.nearest(point, return_all=True))
-            distance = min(point.distance(to_geom.iloc[idx[0]]) for idx in nearest)
-            min_distances.append(distance)
 
-        self.data = pd.Series(min_distances)
+class ProximityRisk(Metric):
+    NAME = "proximity_risk"
+
+    def __init__(self, column=None, value=None, threshold=None):
+        super().__init__()
+        self.column = column
+        self.value = value
+        self.threshold = threshold
+        self.name = metric_name(self.NAME, (self.column, self.value))
+
+    def _calculate_metric(self, gdf_input, gdf_raster):
+        if self.column is not None and self.value is not None:
+            gdf_to = gdf_input[gdf_input[self.column] == self.value]
+        else:
+            gdf_to = gdf_input
+
+        gdf_from = gdf_raster
+        proximity = calculate_gdf_proximity(gdf_from, gdf_to)
+        risk = proximity_to_risk(proximity, self.threshold)
+
+        self.data = pd.Series(risk)
         self._calculated = True
