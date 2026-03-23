@@ -22,6 +22,10 @@ forest = SpatialData(
         ProximityRisk("land_use", "forest", 500): 1.0
     }
 )
+
+print(forest)
+
+
 fields = SpatialData(
     "src/tests/data/gis/fields/fields.shp",
     metrics={
@@ -87,7 +91,7 @@ environment = Environment(
 )
 environment.calculate()
 
-#
+
 
 mobility = KDE(kernel="gaussian", bandwidth=200)
 

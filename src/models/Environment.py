@@ -22,8 +22,26 @@ class Environment:
         self._calculated = False
         self._set_temporal_resolution()
 
+    def __str__(self):
+        spatial = ""
+        for name, data in self.spatial_data.items():
+            spatial += f"{name}\n"
+            spatial += f"{data}"
+
+        temporal = ""
+        for name, data in self.temporal_data.items():
+            temporal += f"{name}\n"
+            for k, v in data._input_dict.items():
+                if data.data_type is SpatialData:
+                    temporal += f"{k}\n{v}\n\n"
+                if data.data_type is float:
+                    temporal += f"{k}: {v}\n"
+            temporal += "\n"
+        return f"Spatial:\n{spatial}\n\nTemporal:\n{temporal}"
+
     def save(self, filename):
         # TODO: implement Environment.save()
+        # Use a hash over grid, metrics, and other attributes
         raise NotImplemented()
 
     def load(self, filename):
@@ -31,28 +49,18 @@ class Environment:
         raise NotImplemented()
 
     def calculate(self):
-        # Populate DataFrame with unique land/metric ids
         for name, data in self.spatial_data.items():
             data.calculate(self.gdf_raster)
 
         for name, temporal in self.temporal_data.items():
             if temporal.data_type is not SpatialData:
                 continue
-            for ii, spatial in enumerate(temporal.data):
-                # TODO: set this as an object property to avoid duplicating this logic
+            for spatial in temporal.data:
                 spatial.calculate(self.gdf_raster)
-                # prefix = f"{name}_{ii:03d}"
-                # self._add_metrics_to_gdf(spatial, prefix)
 
         self._calculated = True
 
     def sample(self, timestamp, method="nearest"):
-        """
-
-        :param timestamp:
-        :param method:
-        :return:
-        """
         if not self._calculated:
             print("run 'calculate()' before 'sample()'")
 

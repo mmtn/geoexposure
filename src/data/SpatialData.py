@@ -1,7 +1,6 @@
-from copy import copy as shallow_copy
-from copy import deepcopy
+from copy import copy as shallow_copy, deepcopy
 
-import numpy as np
+import pandas as pd
 from geopandas import GeoDataFrame
 
 
@@ -18,6 +17,20 @@ class SpatialData:
 
         self._metrics_list = list(self.metrics.keys())
         self._metric_weights = list(self.metrics.values())
+
+    def __str__(self):
+        df = pd.DataFrame(
+            data={
+                "metric": [metric.name for metric in self._metrics_list],
+                "weight": [weight for weight in self._metric_weights],
+                "calculated": [metric._calculated for metric in self._metrics_list],
+            },
+        )
+        if df.empty:
+            return "No metrics"
+        else:
+            return df.to_string(index=False)
+
 
     def copy(self):
         new = self.__class__.__new__(self.__class__)
@@ -36,7 +49,6 @@ class SpatialData:
         self._calculated = True
 
     def _set_data(self, file, crs):
-        # Check string first because strings are also Iterables
         if not isinstance(file, str):
             raise TypeError("'data' must be 'path/to/shape/file'")
         self.gdf = GeoDataFrame.from_file(file)
@@ -81,3 +93,11 @@ class SpatialData:
         for metric, weight in self.metrics.items():
             m_sum += weight * self.gdf_metrics[metric.name]
         return m_sum
+
+    def set_weights(self, weights: list):
+        self.metrics = {
+            metric: weight
+            for metric, weight in zip(self.metrics.keys(), weights)
+        }
+        self._metrics_list = list(self.metrics.keys())
+        self._metric_weights = list(self.metrics.values())

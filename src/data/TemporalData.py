@@ -25,6 +25,7 @@ class TemporalData:
         self.cycle_duration = cycle_duration
         self.temporal_resolution = temporal_resolution
         self.temporal_type = temporal_type
+        self._input_dict = time_data_dict
         self._create_dict(time_data_dict)
 
         # Initialise variables
