@@ -2,12 +2,11 @@ import geopandas as gpd
 import numpy as np
 from shapely import Point
 from sklearn.neighbors import KernelDensity
-from scipy.stats import gaussian_kde
+from tqdm import tqdm
 
-from src.models.Mobility import Mobility
+from src.data.Trajectory import Trajectory, X, Y
+from src.models.Mobility import MAX_NUM_GRID_POINTS, Mobility
 from src import utils
-
-MAX_NUM_GRID_POINTS = 1e6
 
 
 class KDE(Mobility):
@@ -26,39 +25,52 @@ class KDE(Mobility):
 
     def distribution(
             self,
-            trajectory,
-            gdf_geometry,
-            weights=None,
-            bounds=None
-    ):
-        latitude = trajectory["latitude"]
-        longitude = trajectory["longitude"]
-        weights = trajectory["dwell_time_seconds"]
-        coordinates = np.array([latitude, longitude])
+            trajectory: Trajectory,
+            gdf_geometry: gpd.GeoDataFrame,
+            bounds=None,
+    ) -> gpd.GeoDataFrame:
 
-        evaluation_coordinates = utils.get_gdf_centroids(gdf_geometry, bounds)
-        x, y = evaluation_coordinates.transpose()
-        xy_pairs = list(zip(x, y))
-        geometry = [Point(xy) for xy in xy_pairs]
+        standard_deviations = 3
+        buffer = self.bandwidth * standard_deviations
+        data = self._prepare_mobility_data(trajectory, gdf_geometry, bounds, buffer)
 
-        if len(evaluation_coordinates) > MAX_NUM_GRID_POINTS:
-            raise ValueError(f"Too many coordinates (max = {MAX_NUM_GRID_POINTS}")
+        x, y, t, dt = data.x, data.y, data.t, data.dt
+        mask = data.mask
+        if len(x) == 0 or not np.any(mask):
+            return data.zero_density_gdf
 
-        if coordinates.shape[1] == 0:
-            return gpd.GeoDataFrame(
-                data={"density": np.zeros_like(x)},
-                geometry=geometry,
-                crs=gdf_geometry.crs
-            )
+        eval_centroids = data.eval_centroids
+        points = data.points
+        density = data.zero_density_gdf.density.to_numpy().copy()
 
-        estimator = self._get_estimator(coordinates, weights)
+        #
+
+        print(f"Evaluating KDE at {len(eval_centroids)} points...")
+
+        coordinates = np.array([x, y])
+        estimator = self._get_estimator(coordinates, weights=dt)
+
         np.seterr(divide="ignore")
-        log_scores = estimator.score_samples(evaluation_coordinates)
+        batch_size = 500
+        batches = np.array_split(
+            eval_centroids,
+            max(1, len(eval_centroids) // batch_size)
+            )
+        log_scores = np.concatenate(
+            [
+                estimator.score_samples(batch)
+                for batch in tqdm(batches, desc=f"KDE (batches of {batch_size} points)")
+            ]
+        )
         np.seterr(divide="warn")
-        scores = np.exp(log_scores)
+
+        density[mask] = np.exp(log_scores)
 
         return gpd.GeoDataFrame(
-            data={"density": scores},
-            geometry=geometry,
-            crs=gdf_geometry.crs
+            data={
+                "density": density,
+                "point_geometry": points,
+            },
+            geometry=gdf_geometry.geometry,
+            crs=gdf_geometry.crs,
         )
