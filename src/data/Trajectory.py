@@ -1,32 +1,37 @@
 import warnings
 
+import numpy
 import numpy as np
 import pandas as pd
+from pandas import DataFrame
 
 DATETIME = "datetime"
-LATITUDE = "latitude"
-LONGITUDE = "longitude"
+X = "x"
+Y = "y"
 DWELL_TIME_SECONDS = "dwell_time_seconds"
 
 REQUIRED_COLUMNS = [
     DATETIME,
-    LATITUDE,
-    LONGITUDE,
+    X,
+    Y,
 ]
 
 MIN_ROWS = 3
 
 
 class Trajectory:
-    def __init__(self, df):
+    def __init__(self, df: DataFrame):
         assert (sorted(df.columns) == sorted(REQUIRED_COLUMNS)), \
-            "DataFrame must have columns 'datetime', 'latitude', 'longitude'"
+            "DataFrame must have columns 'datetime', 'x', 'y'"
         assert (len(df) >= MIN_ROWS), \
             f"DataFrame for a trajectory must have at least {MIN_ROWS} rows"
 
         df[DATETIME] = pd.to_datetime(df[DATETIME], format="%Y-%m-%d %H:%M:%S")
         self.data = df
         self._add_dwell_times()
+
+    def __len__(self):
+        return len(self.data)
 
     @property
     def start_time(self):
@@ -38,7 +43,7 @@ class Trajectory:
 
     @property
     def coordinates(self):
-        return np.array([self.data[LATITUDE], self.data[LONGITUDE]])
+        return np.array([self.data[X], self.data[Y]])
 
     def data_in_window(self, start, end):
         df = self.data.copy()
@@ -50,13 +55,18 @@ class Trajectory:
         clipped_start = interval_start.clip(lower=start)
         clipped_end = interval_end.clip(upper=end)
         clipped_duration = clipped_end - clipped_start
-        clipped_duration = clipped_duration.dt.total_seconds().clip(lower=0.0)
+        clipped_duration = (
+            clipped_duration
+            .dt.total_seconds()
+            .fillna(0.0)
+            .clip(lower=0.0)
+        )
 
         mask = clipped_duration > 0
-        df = df[mask]
-        df[DWELL_TIME_SECONDS] = clipped_duration[mask]
-
-        return df.reset_index(drop=True)
+        df_mask = df[mask]
+        window = Trajectory(df=df_mask[REQUIRED_COLUMNS])
+        window.data[DWELL_TIME_SECONDS] = clipped_duration[mask]
+        return window
 
     def _add_dwell_times(self):
         datetimes = self.data[DATETIME]
@@ -123,17 +133,27 @@ class Trajectory:
             after = self.data[self.data[DATETIME] >= t].iloc[0]
 
             if before[DATETIME] == after[DATETIME]:
-                lat = before[LATITUDE]
-                lon = before[LONGITUDE]
+                x = before[X]
+                y = before[Y]
             else:
                 weight = (
                         (t - before[DATETIME]).total_seconds() /
                         (after[DATETIME] - before[DATETIME]).total_seconds()
                 )
-                lat = before[LATITUDE] + weight * (after[LATITUDE] - before[LATITUDE])
-                lon = before[LONGITUDE] + weight * (
-                            after[LONGITUDE] - before[LONGITUDE])
+                x = before[X] + weight * (after[X] - before[X])
+                y = before[Y] + weight * (after[Y] - before[Y])
 
-            rows.append({DATETIME: t, LATITUDE: lat, LONGITUDE: lon})
+            rows.append({DATETIME: t, X: x, Y: y})
 
         return pd.DataFrame(rows)
+
+    def get_data_arrays(self) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """
+        Extract sorted numpy arrays from a Trajectory.
+        """
+        x_values = self.data[X].to_numpy(dtype=float)
+        y_values = self.data[Y].to_numpy(dtype=float)
+        t_values = self.data[DATETIME].to_numpy(dtype=np.datetime64) # array of datetime objects
+        dt_values = self.data[DWELL_TIME_SECONDS].to_numpy(dtype=float)
+        order = np.argsort(t_values)
+        return x_values[order], y_values[order], t_values[order], dt_values[order]

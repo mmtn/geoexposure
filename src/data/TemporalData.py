@@ -4,7 +4,7 @@ import numpy as np
 from src.Enums import TemporalType
 from src.data.SpatialData import SpatialData
 
-from src.utils import (check_iter_types, get_cyclic_timestamp,
+from src.utils import (REFERENCE_TIME, check_iter_types, get_cyclic_timestamp,
                        match_datetime_in_list, round_datetime)
 
 
@@ -49,13 +49,22 @@ class TemporalData:
         if len(self.data) <= 1:
             raise ValueError("multiple time points must be provided for TemporalData")
 
-        if self.temporal_type is TemporalType.CYCLIC and self.cycle_duration is None:
-            raise ValueError("cycle duration must be defined for TemporalType.CYCLIC")
+        if self.temporal_type is TemporalType.CYCLIC:
+            temp = [
+                get_cyclic_timestamp(ts, dt.timedelta(days=366))
+                for ts in self.timestamps
+            ]
+            if self.cycle_duration is None:
+                raise ValueError("cycle duration must be defined for TemporalType.CYCLIC")
+            if self.cycle_duration < (max(temp) - min(temp)):
+                raise ValueError("cycle duration must be longer than time between points")
 
         if self.temporal_type is TemporalType.DATED and self.timestamp_type is dt.datetime:
             raise ValueError(
                 "'time_data_dict' keys must be dt.datetime for TemporalType.DATED"
             )
+
+
 
     def sample(self, timestamp, method="nearest"):
         if self.temporal_type is TemporalType.CYCLIC:
@@ -151,14 +160,18 @@ class TemporalData:
             return prev_value
 
         to_previous = abs(datetime - dt_previous)
-        time_diff = abs(dt_next - dt_previous)
+        if dt_next > dt_previous:
+            time_diff = abs(dt_next - dt_previous)
+        else:
+            time_diff = abs(dt_next + self.cycle_duration - dt_previous)
         loc = to_previous / time_diff
 
-        if self.data_type is float:
+        if issubclass(self.data_type, (float, np.floating)):
             total_diff = next_value - prev_value
             interpolated = prev_value + (loc * total_diff)
-
-        if self.data_type is SpatialData:
+        elif self.data_type is SpatialData:
             interpolated = prev_value.interpolate(next_value, loc=loc)
+        else:
+            raise TypeError("unknown data type")
 
         return interpolated

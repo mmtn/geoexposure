@@ -13,7 +13,7 @@ class SpatialData:
         self._set_data(file, crs)
         self.metrics = metrics if metrics is not None else dict()
 
-        assert type(self.metrics) is dict, "metrics must be a dict"
+        assert type(self.metrics) is dict, "metrics must be a 'Metric: weight' dict"
 
         self._metrics_list = list(self.metrics.keys())
         self._metric_weights = list(self.metrics.values())
@@ -66,17 +66,21 @@ class SpatialData:
         new_metrics = dict()
 
         for metric, weight in self.metrics.items():
-            new_name = f"interpolate_{metric.name}_1"
+            new_name = f"interpolated_{metric.name}"
             new_gdf_metrics[new_name] = self.gdf_metrics[metric.name] * self_scale
             metric_copy = deepcopy(metric)
             metric_copy.name = new_name
+            if new_name in new_metrics.keys():
+                raise RuntimeError("overwriting existing data during interpolation")
             new_metrics.update({metric_copy: weight})
 
         for metric, weight in other.metrics.items():
-            new_name = f"interpolate_{metric.name}_2"
+            new_name = f"interpolated_{metric.name}"
             new_gdf_metrics[new_name] = other.gdf_metrics[metric.name] * other_scale
             metric_copy = deepcopy(metric)
             metric_copy.name = new_name
+            if new_name in new_metrics.keys():
+                raise RuntimeError("overwriting existing data during interpolation")
             new_metrics.update({metric_copy: weight})
 
         new = self.__class__.__new__(self.__class__)
@@ -89,7 +93,7 @@ class SpatialData:
         return new
 
     def metric_sum(self):
-        m_sum = self.gdf_metrics[["geometry"]].copy()
+        m_sum = pd.Series(0.0, index=range(len(self.gdf_metrics)))
         for metric, weight in self.metrics.items():
             m_sum += weight * self.gdf_metrics[metric.name]
         return m_sum

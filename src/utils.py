@@ -7,7 +7,8 @@ from collections import abc
 import geopandas as gpd
 import numpy as np
 import pandas as pd
-from shapely import Polygon
+from shapely import Point, Polygon
+from tqdm import tqdm
 
 from src.data.Trajectory import Trajectory
 
@@ -45,7 +46,7 @@ def metric_name(metric, args, join_str="_"):
     elif isinstance(args, str):
         arg_string = args
     elif isinstance(args, abc.Iterable):
-        arg_string = join_str.join([f"{arg}" for arg in args])
+        arg_string = join_str.join([f"{arg}" for arg in args if arg is not None])
     else:
         arg_string = f"{args}"
 
@@ -126,23 +127,28 @@ def raster(gdf, pixel_size_metres):
     total_points = ii_max * jj_max
 
     print(
-        f"Rasterising {px_m}m resolution "
+        f"Calculating raster at {px_m}m resolution "
         f"({ii_max:.0f} x {jj_max:.0f} = {total_points:.0f})"
     )
 
-    raster_list = [
-        Polygon(
-            (
-                (x_min + (px_m * ii), y_min + (px_m * jj)),
-                (x_min + (px_m * ii), y_min + (px_m * (jj + 1))),
-                (x_min + (px_m * (ii + 1)), y_min + (px_m * (jj + 1))),
-                (x_min + (px_m * (ii + 1)), y_min + (px_m * jj)),
-                (x_min + (px_m * ii), y_min + (px_m * jj)),
-            )
-        )
-        for jj in range(int(jj_max))
-        for ii in range(int(ii_max))
-    ]
+    total = int(ii_max) * int(jj_max)
+    raster_list = []
+
+    with tqdm(total=total, desc="Rasterising") as pbar:
+        for jj in range(int(jj_max)):
+            for ii in range(int(ii_max)):
+                raster_list.append(
+                    Polygon(
+                        (
+                            (x_min + (px_m * ii), y_min + (px_m * jj)),
+                            (x_min + (px_m * ii), y_min + (px_m * (jj + 1))),
+                            (x_min + (px_m * (ii + 1)), y_min + (px_m * (jj + 1))),
+                            (x_min + (px_m * (ii + 1)), y_min + (px_m * jj)),
+                            (x_min + (px_m * ii), y_min + (px_m * jj)),
+                        )
+                    )
+                )
+                pbar.update(1)
 
     return gpd.GeoDataFrame(geometry=raster_list, crs=gdf.crs)
 
@@ -261,12 +267,16 @@ def match_datetime_in_list(target, datetime_list, cycle=None, to="nearest"):
     return match
 
 
-def read_csv_directory(data_directory):
+def read_csv_directory(data_directory, max_files=np.inf):
     """
     Reads data from CSV files in given directory to Trajectory objects
 
-    :param data_directory: contains CSV files with datetime, latitude, longitude
-    :return: list of Trajectory objects
+    Args:
+        data_directory: contains CSV files with datetime, x, y
+        max_files:
+
+    Returns:
+        list of Trajectory objects
     """
     csv_files = [
         os.path.join(data_directory, file)
@@ -275,37 +285,49 @@ def read_csv_directory(data_directory):
     ]
     return [
         Trajectory(pd.read_csv(csv))
-        for csv in csv_files
+        for file_num, csv in enumerate(csv_files)
+        if file_num < max_files
     ]
 
 
-def get_gdf_centroids(gdf, bounds=None):
+def get_gdf_centroids(gdf: gpd.GeoDataFrame, bounds=None, as_numpy=False):
     if bounds is not None:
         gdf = gdf.clip(bounds)
     points = [geom.centroid for geom in gdf.geometry]
-    return np.array([[point.x, point.y] for point in points])
+    if as_numpy:
+        return np.array([[point.x, point.y] for point in points])
+    else:
+        return points
 
 
 def calculate_gdf_proximity(gdf_from, gdf_to):
     if not all(isinstance(x, gpd.GeoDataFrame) for x in (gdf_from, gdf_to)):
-        ValueError("Inputs must be GeoDataFrames with 'geometry' column")
+        raise ValueError("Inputs must be GeoDataFrames with 'geometry' column")
 
-    to_geom = gdf_to.geometry
-    from_geom = gdf_from.geometry
+    if all(isinstance(x, Polygon) for x in gdf_from.geometry):
+        gdf_from["geometry"] = get_gdf_centroids(gdf_from)
 
-    spatial_index = to_geom.sindex  # R-tree spatial index for fast lookup
-    min_distances = []
+    if not all(isinstance(x, Point) for x in gdf_from.geometry):
+        raise ValueError("'from' geometries must be Points")
 
-    for point in from_geom:
-        nearest = list(spatial_index.nearest(point, return_all=True))
-        distance = min(point.distance(to_geom.iloc[idx[0]]) for idx in nearest)
-        min_distances.append(distance)
+    # Spatial join to find the nearest geometry in gdf_to for each geometry in gdf_from
+    joined = gpd.sjoin_nearest(
+        gdf_from,
+        gdf_to[['geometry']],
+        how='left',
+        distance_col='distance'
+    )
 
-    return min_distances
+    return joined['distance'].to_list()
 
 
 def proximity_to_risk(distances, threshold, shape=4.0):
     d = np.asarray(distances, dtype=float)
+
+    if threshold == 0 or threshold is None:
+        risk = np.zeros_like(d, dtype=float)
+        risk[d == 0] = 1.0
+        return risk
 
     if threshold < 0:
         raise ValueError("threshold must be >= 0")
@@ -313,12 +335,7 @@ def proximity_to_risk(distances, threshold, shape=4.0):
     if shape <= 0:
         raise ValueError("shape must be > 0")
 
-    if threshold == 0:
-        risk = np.zeros_like(d, dtype=float)
-        risk[d == 0] = 1.0
-        return risk
-
-    x = np.clip(d / threshold, 0.0, 1.0) # Normalise distance to [0, 1]
+    x = np.clip(d / threshold, 0.0, 1.0)  # Normalise distance to [0, 1]
 
     # Normalised exponential decay: 1 at x=0, 0 at x=1
     exp_neg_shape = np.exp(-shape)

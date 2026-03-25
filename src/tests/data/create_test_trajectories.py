@@ -17,9 +17,10 @@ and Environment
 """
 
 import datetime as dt
-
 import numpy as np
 import pandas as pd
+
+from src.data.Trajectory import DATETIME, X, Y
 
 
 def get_xyt(
@@ -47,7 +48,7 @@ def get_xyt(
         t.append(current_time)
         ii += 1
 
-    return pd.DataFrame(data={"datetime": t, "latitude": x, "longitude": y})
+    return pd.DataFrame(data={DATETIME: t, X: x, Y: y})
 
 
 #
@@ -55,9 +56,9 @@ def get_xyt(
 ANCHOR_TIME = dt.datetime(year=2020, month=1, day=1, hour=0, minute=0, second=0)
 MAX_DURATION = dt.timedelta(days=14)
 
-x_start = 0.0  # metres
+x_start = 1.0  # metres
 y_start = 500.0  # metres
-x_max = 4000.0
+x_max = 4001.0
 
 low_frequency = dt.timedelta(hours=2)
 high_frequency = dt.timedelta(minutes=1)
@@ -83,6 +84,7 @@ low_freq_df = get_xyt(
     x_max,
 )
 
+# 3. High frequency with random missingness
 total_entries = len(high_freq_df)
 proportion_to_drop = 0.5
 removal_indices = np.random.choice(
@@ -92,6 +94,6 @@ removal_indices = np.random.choice(
 )
 inconsistent_frequency_df = high_freq_df.copy().drop(removal_indices)
 
-high_freq_df.to_csv("trajectories/02_high_frequency.csv", index=False)
 inconsistent_frequency_df.to_csv("trajectories/01_inconsistent_frequency.csv", index=False)
+high_freq_df.to_csv("trajectories/02_high_frequency.csv", index=False)
 low_freq_df.to_csv("trajectories/03_low_frequency.csv", index=False)
