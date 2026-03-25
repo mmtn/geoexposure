@@ -1,4 +1,9 @@
+import warnings
+
+import geopandas as gpd
 import numpy as np
+import pandas as pd
+from geopandas import GeoDataFrame
 
 from src.data.SpatialData import SpatialData
 from src.utils import get_cyclic_timestamp, raster
@@ -14,10 +19,10 @@ class Environment:
             temporal_data: dict = None,
             spatial_reference_data=None
     ):
-        self.spatial_data = spatial_data
-        self.temporal_data = temporal_data
+        self.spatial_data = spatial_data if spatial_data is not None else None
+        self.temporal_data = temporal_data if temporal_data is not None else None
         self.spatial_resolution = spatial_resolution
-        self.spatial_data_ref = spatial_reference_data
+        self.spatial_reference_data = spatial_reference_data
         self.gdf_raster = self._calculate_raster()
         self._calculated = False
         self._set_temporal_resolution()
@@ -50,44 +55,58 @@ class Environment:
 
     def calculate(self):
         for name, data in self.spatial_data.items():
-            data.calculate(self.gdf_raster)
+            data.calculate(self.gdf_raster.copy())
+
+        if self.temporal_data is None:
+            self._calculated = True
+            return
 
         for name, temporal in self.temporal_data.items():
             if temporal.data_type is not SpatialData:
                 continue
             for spatial in temporal.data:
-                spatial.calculate(self.gdf_raster)
+                spatial.calculate(self.gdf_raster.copy())
 
         self._calculated = True
+
+    def get_spatial_exposure(self) -> GeoDataFrame:
+        spatial_total = self.gdf_raster.copy()
+        for key, spatial in self.spatial_data.items():
+            for metric, weight in spatial.metrics.items():
+                col = f"{key}_{metric.name}"
+                spatial_total[col] = spatial.gdf_metrics[metric.name]
+        return spatial_total.drop(columns=["geometry"])
+
+    def get_temporal_exposure(self, timestamp, method="nearest"):
+        temporal_total = self.gdf_raster.copy()
+        temporal_data = self.temporal_data if self.temporal_data is not None else {}
+
+        for key, temporal in temporal_data.items():
+            col = f"temporal_{key}"
+            data_at_timestamp = temporal.sample(timestamp, method=method)
+            if issubclass(temporal.data_type, (float, np.floating)):
+                continue  # floats for scaling are used separately in Exposure.py
+            elif temporal.data_type is SpatialData:
+                temporal_total[col] = data_at_timestamp.metric_sum()
+            else:
+                raise TypeError("unknown data type")
+
+        return temporal_total.drop(columns=["geometry"])
 
     def sample(self, timestamp, method="nearest"):
         if not self._calculated:
             print("run 'calculate()' before 'sample()'")
 
-        # Create new GeoDataFrame with zero exposure
         gdf_sample = self.gdf_raster.copy()
-        gdf_sample[self.EXPOSURE_COLUMN] = 0.0
-
-        # Add all metrics from spatial only metrics
-        for key, spatial in self.spatial_data.items():
-            for metric in spatial.metrics:
-                gdf_sample[self.EXPOSURE_COLUMN] += spatial.gdf_metrics[metric.name]
-
-        # Add spatial metrics at given timestamp
-        for key, temporal in self.temporal_data.items():
-            if temporal.data_type is not SpatialData:
-                continue
-            spatial = temporal.sample(timestamp, method=method)
-            for metric in spatial.metrics:
-                gdf_sample[self.EXPOSURE_COLUMN] += spatial.gdf_metrics[metric.name]
-
-        # Scale by any time dependent factors
-        gdf_sample[self.EXPOSURE_COLUMN] *= self._scaling_factors(
-            timestamp,
-            method=method
+        spatial = self.get_spatial_exposure()
+        temporal = self.get_temporal_exposure(timestamp, method=method)
+        merged = gpd.GeoDataFrame(
+            pd.concat([gdf_sample, spatial, temporal], axis=1),
+            geometry="geometry",
+            crs=gdf_sample.crs
         )
 
-        return gdf_sample[["geometry", self.EXPOSURE_COLUMN]]
+        return merged
 
     def _scaling_factors(self, timestamp, method="nearest") -> float:
         if self.temporal_data is None:
@@ -98,13 +117,13 @@ class Environment:
             scaling_factors = [
                 temporal.sample(timestamp, method=method)
                 for temporal in self.temporal_data.values()
-                if temporal.data_type == float
+                if issubclass(temporal.data_type, (float, np.floating))
             ]
             return np.prod(scaling_factors)
 
     def _calculate_raster(self):
         return raster(
-            self.spatial_data_ref.gdf,
+            self.spatial_reference_data.gdf,
             self.spatial_resolution
         )
 
@@ -118,3 +137,25 @@ class Environment:
                     for data in self.temporal_data.values()
                 ]
             )
+
+    def plot(self, datetime=None, method="nearest", **kwargs):
+        exposure = self.get_spatial_exposure()
+        if datetime is None:
+            title = "Spatial data only - no temporal variation shown"
+        else:
+            exposure += self.get_temporal_exposure(datetime, method)
+            title = str(datetime)
+
+        if exposure.empty:
+            warnings.warn("No exposure sources to plot")
+            return None
+
+        gdf_plot = self.gdf_raster.copy()
+        gdf_plot[self.EXPOSURE_COLUMN] = exposure
+        ax = gdf_plot.plot(column=self.EXPOSURE_COLUMN, **kwargs)
+        ax.set_title(title)
+        return ax
+
+    def plot_reference(self, **kwargs):
+        ax = self.spatial_reference_data.plot(**kwargs)
+        return ax
