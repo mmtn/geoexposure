@@ -1,11 +1,12 @@
 from copy import copy as shallow_copy, deepcopy
+from typing import Any
 
 import pandas as pd
-from geopandas import GeoDataFrame
+import geopandas as gpd
 
 
 class SpatialData:
-    def __init__(self, file, crs=None, metrics=None):
+    def __init__(self, file: str, crs: Any | None = None, metrics: dict | None = None):
         self.gdf = None
         self.gdf_metrics = None
         self._calculated = False
@@ -41,7 +42,7 @@ class SpatialData:
         new._calculated = self._calculated
         return new
 
-    def calculate(self, gdf_raster):
+    def calculate(self, gdf_raster: gpd.GeoDataFarme):
         self.gdf_metrics = gdf_raster.copy()
         for metric in self._metrics_list:
             self.gdf_metrics[metric.name] = metric.calculate(self.gdf, gdf_raster)
@@ -50,11 +51,11 @@ class SpatialData:
     def _set_data(self, file, crs):
         if not isinstance(file, str):
             raise TypeError("'data' must be 'path/to/shape/file'")
-        self.gdf = GeoDataFrame.from_file(file)
+        self.gdf = gpd.GeoDataFrame.from_file(file)
         if crs is not None:
             self.gdf = self.gdf.to_crs(epsg=crs)
 
-    def interpolate(self, other, loc):
+    def interpolate(self, other: "SpatialData", loc: float) -> "SpatialData":
         if loc < 0 or loc > 1:
             raise ValueError(f"'loc' must between 0 and 1: got {loc}")
 
@@ -91,7 +92,7 @@ class SpatialData:
         new._metric_weights = list(new.metrics.values())
         return new
 
-    def metric_sum(self):
+    def metric_sum(self) -> float:
         m_sum = pd.Series(0.0, index=range(len(self.gdf_metrics)))
         for metric, weight in self.metrics.items():
             m_sum += weight * self.gdf_metrics[metric.name]

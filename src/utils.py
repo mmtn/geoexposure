@@ -7,10 +7,10 @@ from collections import abc
 import geopandas as gpd
 import numpy as np
 import pandas as pd
-from shapely import Point, Polygon
+from shapely import Polygon, Point
 from tqdm import tqdm
 
-from src.data.Trajectory import Trajectory
+from src import Trajectory
 
 #
 
@@ -28,7 +28,9 @@ DAILY = [
 MONTHLY = [dt.date(year=REFERENCE_TIME.year, month=(m + 1), day=1) for m in range(12)]
 
 
-def metric_name(metric, args, join_str="_"):
+def metric_name(
+    metric: str, args: abc.Iterable | str | None, join_str: str = "_"
+) -> str:
     if args is None:
         arg_string = None
     elif isinstance(args, str):
@@ -44,15 +46,9 @@ def metric_name(metric, args, join_str="_"):
         return f"{metric}_{arg_string}"
 
 
-def nearest_window(timestamp, window_starts):
-    pass
-
-
-def nearest_window_cyclic(timestamp, window_starts, cycle_duration):
-    pass
-
-
-def round_datetime(timestamp, delta, to="nearest"):
+def round_datetime(
+    timestamp: dt.datetime, delta: dt.timedelta, to: str = "nearest"
+) -> dt.datetime:
     """
     Round a datetime to a multiple of a timedelta.
 
@@ -76,14 +72,18 @@ def round_datetime(timestamp, delta, to="nearest"):
     return REFERENCE_TIME + dt.timedelta(seconds=rounded)
 
 
-def get_times(start_time, end_time, delta):
+def get_times(
+    start_time: dt.datetime, end_time: dt.datetime, delta: dt.timedelta
+) -> list:
     start_new = round_datetime(start_time, delta, to="floor")
     end_new = round_datetime(end_time, delta, to="ceil")
     num_times = int((end_new - start_new) / delta)
     return [start_new + (ii * delta) for ii in range(num_times)]
 
 
-def get_time_windows(start_time, end_time, delta):
+def get_time_windows(
+    start_time: dt.datetime, end_time: dt.datetime, delta: dt.timedelta
+) -> list[tuple[dt.datetime, dt.datetime]]:
     start_new = round_datetime(start_time, delta, to="floor")
     end_new = round_datetime(end_time, delta, to="ceil")
     num_times = int((end_new - start_new) / delta)
@@ -93,11 +93,11 @@ def get_time_windows(start_time, end_time, delta):
     ]
 
 
-def check_iter_types(iterable, data_type):
+def check_iter_types(iterable: abc.Iterable, data_type: type) -> bool:
     return all(isinstance(item, data_type) for item in iterable)
 
 
-def raster(gdf, pixel_size_metres):
+def raster(gdf: gpd.GeoDataFrame, pixel_size_metres: int | float) -> gpd.GeoDataFrame:
     def round_down(value, precision):
         return np.floor(value / precision) * precision
 
@@ -143,7 +143,9 @@ def raster(gdf, pixel_size_metres):
     return gpd.GeoDataFrame(geometry=raster_list, crs=gdf.crs)
 
 
-def get_cyclic_timestamp(dt_input, cycle_duration):
+def get_cyclic_timestamp(
+    dt_input: dt.time | dt.date | dt.datetime, cycle_duration: dt.timedelta
+) -> dt.datetime:
     """
     dt.time objects assume daily cycle
     dt.date objects assume yearly cycle
@@ -194,7 +196,12 @@ def get_cyclic_timestamp(dt_input, cycle_duration):
     return ts
 
 
-def match_datetime_in_list(target, datetime_list, cycle=None, to="nearest"):
+def match_datetime_in_list(
+    target: dt.datetime,
+    datetime_list: list[dt.datetime],
+    cycle: dt.timedelta | None = None,
+    to: str = "nearest",
+) -> dt.datetime:
     sorted_list = sorted(datetime_list)
     if sorted_list != datetime_list:
         raise RuntimeError("'datetime_list' must be sorted")
@@ -252,7 +259,7 @@ def match_datetime_in_list(target, datetime_list, cycle=None, to="nearest"):
     return match
 
 
-def read_csv_directory(data_directory, max_files=np.inf):
+def read_csv_directory(data_directory: str, max_files: int | float = np.inf):
     """
     Reads data from CSV files in given directory to Trajectory objects
 
@@ -275,52 +282,11 @@ def read_csv_directory(data_directory, max_files=np.inf):
     ]
 
 
-def get_gdf_centroids(gdf: gpd.GeoDataFrame, bounds=None):
+def get_gdf_centroids(
+    gdf: gpd.GeoDataFrame, bounds: tuple | None = None
+) -> tuple[list[Point], np.ndarray]:
     if bounds is not None:
         gdf = gdf.clip(bounds)
     points = [geom.centroid for geom in gdf.geometry]
     points_np = np.array([[point.x, point.y] for point in points])
     return points, points_np
-
-
-def calculate_gdf_proximity(gdf_from, gdf_to):
-    if not all(isinstance(x, gpd.GeoDataFrame) for x in (gdf_from, gdf_to)):
-        raise ValueError("Inputs must be GeoDataFrames with 'geometry' column")
-
-    if all(isinstance(x, Polygon) for x in gdf_from.geometry):
-        gdf_from["geometry"], _ = get_gdf_centroids(gdf_from)
-
-    if not all(isinstance(x, Point) for x in gdf_from.geometry):
-        raise ValueError("'from' geometries must be Points")
-
-    # Spatial join to find the nearest geometry in gdf_to for each geometry in gdf_from
-    joined = gpd.sjoin_nearest(
-        gdf_from, gdf_to[["geometry"]], how="left", distance_col="distance"
-    )
-
-    return joined["distance"].to_list()
-
-
-def proximity_to_risk(distances, threshold, shape=4.0):
-    d = np.asarray(distances, dtype=float)
-
-    if threshold == 0 or threshold is None:
-        risk = np.zeros_like(d, dtype=float)
-        risk[d == 0] = 1.0
-        return risk
-
-    if threshold < 0:
-        raise ValueError("threshold must be >= 0")
-
-    if shape <= 0:
-        raise ValueError("shape must be > 0")
-
-    x = np.clip(d / threshold, 0.0, 1.0)  # Normalise distance to [0, 1]
-
-    # Normalised exponential decay: 1 at x=0, 0 at x=1
-    exp_neg_shape = np.exp(-shape)
-    risk = (np.exp(-shape * x) - exp_neg_shape) / (1.0 - exp_neg_shape)
-
-    # Explicitly zero out anything beyond the threshold
-    risk[d > threshold] = 0.0
-    return risk

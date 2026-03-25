@@ -9,4 +9,5 @@ src/tests/data/gis
 src/tests/data/trajectories
 
 # Cache
-.cache  
+.cache
+local_scripts

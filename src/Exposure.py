@@ -4,10 +4,7 @@ import warnings
 import numpy as np
 import pandas as pd
 
-from src import utils
-from src.data.Trajectory import Trajectory
-from src.models.Environment import Environment
-from src.models.Mobility import Mobility
+from src import Trajectory, Mobility, Environment, utils
 
 
 def calculate_exposure(
@@ -19,7 +16,7 @@ def calculate_exposure(
     temporal_resolution: dt.timedelta = None,
     env_sampling_method: str = "interp",
     return_snapshots: bool = False,
-):
+) -> pd.DataFrame:
     if start_time is None:
         start_time = trajectory.data["datetime"].min()
 
@@ -102,10 +99,9 @@ def exposure_sums(
     trajectories: list[Trajectory],
     mobility: Mobility,
     environment: Environment,
-    timestep=None,
-    per_second=False,
-):
-
+    timestep: dt.datetime = None,
+    per_second: bool = False,
+) -> pd.DataFrame:
     results = list()
 
     for trajectory in trajectories:

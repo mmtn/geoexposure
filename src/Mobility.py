@@ -3,11 +3,9 @@ from dataclasses import dataclass
 
 import geopandas as gpd
 import numpy as np
-from geopandas import GeoDataFrame
 from shapely import Point
 
-from src.data.Trajectory import Trajectory
-from src.models.Environment import Environment
+from src import Trajectory, Environment
 
 MAX_NUM_GRID_POINTS = 1e6
 
@@ -21,7 +19,7 @@ class MobilityData:
     eval_coords: np.ndarray
     points: list[Point]
     mask: np.ndarray
-    zero_density_gdf: GeoDataFrame
+    zero_density_gdf: gpd.GeoDataFrame
 
 
 class Mobility(ABC):
@@ -36,12 +34,14 @@ class Mobility(ABC):
         self,
         trajectory: Trajectory,
         environment: Environment,
-        bounds=None,
-    ) -> gpd.GeoDataFrame:
+        bounds: tuple = None,
+    ):
         pass
 
     @staticmethod
-    def _get_mobility_data(trajectory, environment, bounds, buffer):
+    def _get_mobility_data(
+        trajectory: Trajectory, environment: Environment, bounds: tuple, buffer: float
+    ) -> MobilityData:
         """
 
         Args:

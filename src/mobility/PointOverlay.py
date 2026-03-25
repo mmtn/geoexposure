@@ -1,12 +1,7 @@
 import geopandas as gpd
 import numpy as np
-from shapely.geometry import Point
-from tqdm import tqdm
 
-from src import utils
-from src.data.Trajectory import Trajectory
-from src.models.Environment import Environment
-from src.models.Mobility import MAX_NUM_GRID_POINTS, Mobility
+from src import Trajectory, Environment, Mobility
 
 
 class PointOverlay(Mobility):
@@ -42,8 +37,6 @@ class PointOverlay(Mobility):
         if len(x) == 0 or not np.any(mask):
             return data.zero_density_gdf
 
-        eval_centroids = data.eval_coords
-        points = data.points
         density = data.zero_density_gdf.density.to_numpy().copy()
 
         #
@@ -72,7 +65,7 @@ class PointOverlay(Mobility):
         return gpd.GeoDataFrame(
             data={
                 "density": density,
-                "point_geometry": points,
+                "point_geometry": environment.geometry_points,
             },
             geometry=environment.geometry_polygons,
             crs=environment.crs,

@@ -2,18 +2,18 @@ import geopandas as gpd
 import numpy as np
 from sklearn.neighbors import KernelDensity
 
-from src.data.Trajectory import Trajectory
-from src.models.Environment import Environment
-from src.models.Mobility import Mobility
+from src import Trajectory, Environment, Mobility
 
 
 class KDE(Mobility):
-    def __init__(self, kernel, bandwidth):
+    def __init__(self, kernel: str, bandwidth: float):
         super().__init__()
         self.kernel = kernel
         self.bandwidth = bandwidth
 
-    def _get_estimator(self, coordinates, weights):
+    def _get_estimator(
+        self, coordinates: np.ndarray, weights: np.ndarray = None
+    ) -> KernelDensity:
         x, y = coordinates
         if weights is None:
             weights = np.ones_like(x)
@@ -38,7 +38,6 @@ class KDE(Mobility):
         if len(x) == 0 or not np.any(mask):
             return data.zero_density_gdf
         eval_coords = data.eval_coords
-        points = data.points
         density = data.zero_density_gdf.density.to_numpy().copy()
 
         #
@@ -55,7 +54,7 @@ class KDE(Mobility):
         return gpd.GeoDataFrame(
             data={
                 "density": density,
-                "point_geometry": points,
+                "point_geometry": environment.geometry_points,
             },
             geometry=environment.geometry_polygons,
             crs=environment.crs,

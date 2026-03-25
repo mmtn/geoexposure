@@ -1,15 +1,24 @@
 # TODO: add logging which is initialised here
 
+# root level
+from src.Exposure import calculate_exposure
+from src.Environment import Environment
+from src.Mobility import Mobility
+
+# data
 from src.data.SpatialData import SpatialData
 from src.data.TemporalData import TemporalData
 from src.data.Trajectory import Trajectory
 
-from src.models.Exposure import calculate_exposure
-from src.models.Environment import Environment
-from src.models.Mobility import Mobility
+# enums
+from src.enums.TemporalType import TemporalType as TemporalTypeEnum
 
-from src.metrics.Proximity import Proximity
+# metrics
+from src.metrics.Proximity import Proximity, ProximityRisk
 from src.metrics.Fragmentation import Fragmentation
 
-from src import Enums
+# mobility
+from src.mobility import KDE, DensityModel, PointOverlay
+
+# utils
 from src import utils

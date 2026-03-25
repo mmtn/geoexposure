@@ -1,9 +1,8 @@
+import datetime as dt
 import warnings
 
-import numpy
 import numpy as np
 import pandas as pd
-from pandas import DataFrame
 
 DATETIME = "datetime"
 X = "x"
@@ -16,11 +15,9 @@ REQUIRED_COLUMNS = [
     Y,
 ]
 
-MIN_ROWS = 3
-
 
 class Trajectory:
-    def __init__(self, df: DataFrame):
+    def __init__(self, df: pd.DataFrame):
         assert sorted(df.columns) == sorted(
             REQUIRED_COLUMNS
         ), "DataFrame must have columns 'datetime', 'x', 'y'"
@@ -32,11 +29,11 @@ class Trajectory:
         return len(self.data)
 
     @property
-    def start_time(self):
+    def start_time(self) -> dt.datetime:
         return self.data[DATETIME].min()
 
     @property
-    def end_time(self):
+    def end_time(self) -> dt.datetime:
         return self.data[DATETIME].max()
 
     @property
@@ -45,10 +42,10 @@ class Trajectory:
         return time_difference.total_seconds()
 
     @property
-    def coordinates(self):
+    def coordinates(self) -> np.ndarray:
         return np.array([self.data[X], self.data[Y]])
 
-    def data_in_window(self, start, end):
+    def data_in_window(self, start: dt.datetime, end: dt.datetime) -> "Trajectory":
         df = self.data.copy()
         datetimes = df[DATETIME]
 
@@ -75,7 +72,7 @@ class Trajectory:
         dwell_times_seconds = dwell_times_seconds.fillna(0)
         self.data[DWELL_TIME_SECONDS] = dwell_times_seconds
 
-    def resample(self, times, method):
+    def resample(self, times: list, method: str):
         """
         Resample the trajectory at the given times.
 
@@ -110,7 +107,7 @@ class Trajectory:
 
         return Trajectory(resampled)
 
-    def _resample_nearest(self, times):
+    def _resample_nearest(self, times: pd.Series):
         """
         For each requested time, return the row with the closest timestamp.
         """
@@ -119,7 +116,7 @@ class Trajectory:
         resampled[DATETIME] = times.values
         return resampled.reset_index(drop=True)
 
-    def _resample_interp(self, times):
+    def _resample_interp(self, times: pd.Series):
         """
         For each requested time, linearly interpolate latitude and longitude
         between the two adjacent timestamps.

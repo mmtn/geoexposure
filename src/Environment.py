@@ -1,13 +1,13 @@
+import datetime as dt
 import warnings
 
 import geopandas as gpd
 import numpy as np
 import pandas as pd
-from geopandas import GeoDataFrame
 
-from src.EnableCaching import EnableCaching
-from src.data.SpatialData import SpatialData
-from src.utils import get_cyclic_timestamp, get_gdf_centroids, raster
+from Caching import EnableCaching
+from src import SpatialData
+from src.utils import get_gdf_centroids, raster
 
 
 class Environment(EnableCaching):
@@ -16,10 +16,10 @@ class Environment(EnableCaching):
 
     def __init__(
         self,
-        spatial_resolution,
-        spatial_data: dict = None,
-        temporal_data: dict = None,
-        spatial_reference_data=None,
+        spatial_resolution: int | float,
+        spatial_data: dict | None = None,
+        temporal_data: dict | None = None,
+        spatial_reference_data: SpatialData | None = None,
     ):
         self.spatial_data = spatial_data if spatial_data is not None else None
         self.temporal_data = temporal_data if temporal_data is not None else None
@@ -53,12 +53,12 @@ class Environment(EnableCaching):
 
         return f"Spatial:\n{spatial}\n\nTemporal:\n{temporal}"
 
-    def save(self, filename):
+    def save(self, filename: str):
         # TODO: implement Environment.save()
         # Use a hash over grid, metrics, and other attributes
         raise NotImplemented()
 
-    def load(self, filename):
+    def load(self, filename: str):
         # TODO: implement Environment.load()
         raise NotImplemented()
 
@@ -91,7 +91,7 @@ class Environment(EnableCaching):
 
         return columns
 
-    def get_spatial_exposure(self) -> GeoDataFrame:
+    def get_spatial_exposure(self) -> gpd.GeoDataFrame:
         spatial_total = self.gdf_raster.copy()
         for key, spatial in self.spatial_data.items():
             for metric, weight in spatial.metrics.items():
@@ -99,7 +99,9 @@ class Environment(EnableCaching):
                 spatial_total[col] = spatial.gdf_metrics[metric.name]
         return spatial_total.drop(columns=["geometry"])
 
-    def get_temporal_exposure(self, timestamp, method="nearest"):
+    def get_temporal_exposure(
+        self, timestamp: dt.datetime, method: str = "nearest"
+    ) -> gpd.GeoDataFrame:
         temporal_total = self.gdf_raster.copy()
         temporal_data = self.temporal_data if self.temporal_data is not None else {}
 
@@ -115,7 +117,9 @@ class Environment(EnableCaching):
 
         return temporal_total.drop(columns=["geometry"])
 
-    def sample(self, timestamp, method="nearest"):
+    def sample(
+        self, timestamp: dt.datetime, method: str = "nearest"
+    ) -> gpd.GeoDataFrame:
         if not self._calculated:
             print("run 'calculate()' before 'sample()'")
 
@@ -130,7 +134,9 @@ class Environment(EnableCaching):
 
         return merged
 
-    def _scaling_factors(self, timestamp, method="nearest") -> float:
+    def _scaling_factors(
+        self, timestamp: dt.datetime, method: str = "nearest"
+    ) -> float:
         if self.temporal_data is None:
             return 1.0
         elif all(d.data_type is SpatialData for d in self.temporal_data.values()):
@@ -158,7 +164,9 @@ class Environment(EnableCaching):
                 [data.temporal_resolution for data in self.temporal_data.values()]
             )
 
-    def plot_exposure(self, datetime=None, method="nearest", **kwargs):
+    def plot_exposure(
+        self, datetime: dt.datetime | None = None, method: str = "nearest", **kwargs
+    ):
         if not self._calculated:
             print("run 'calculate()' before 'plot_exposure()'")
 

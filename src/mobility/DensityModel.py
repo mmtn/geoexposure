@@ -2,13 +2,9 @@ import datetime as dt
 
 import geopandas as gpd
 import numpy as np
-from shapely.geometry import Point
 from tqdm import tqdm
 
-from src import utils
-from src.data.Trajectory import DATETIME, Trajectory, X, Y
-from src.models.Environment import Environment
-from src.models.Mobility import MAX_NUM_GRID_POINTS, Mobility
+from src import Trajectory, Environment, Mobility
 
 
 class DensityModel(Mobility):
@@ -149,8 +145,6 @@ class DensityModel(Mobility):
         ----------
         trajectory : Trajectory
             Observed positions and times.
-        gdf_geometry : gpd.GeoDataFrame
-            Rasterised geometry used to define the evaluation coordinates.
         bounds : optional
             Passed to utils.get_gdf_centroids to spatially restrict evaluation.
 
@@ -168,9 +162,7 @@ class DensityModel(Mobility):
         mask = data.mask
         if len(x) == 0 or not np.any(mask):
             return data.zero_density_gdf
-
         eval_centroids = data.eval_coords
-        points = data.points
         density = data.zero_density_gdf.density.to_numpy().copy()
 
         #
@@ -198,8 +190,8 @@ class DensityModel(Mobility):
         return gpd.GeoDataFrame(
             data={
                 "density": density,
-                "point_geometry": points,
+                "point_geometry": environment.geometry_points,
             },
-            geometry=gdf_geometry.geometry,
-            crs=gdf_geometry.crs,
+            geometry=environment.geometry_polygons,
+            crs=environment.crs,
         )
