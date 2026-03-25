@@ -7,6 +7,7 @@ from tqdm import tqdm
 
 from src import utils
 from src.data.Trajectory import DATETIME, Trajectory, X, Y
+from src.models.Environment import Environment
 from src.models.Mobility import MAX_NUM_GRID_POINTS, Mobility
 
 
@@ -17,13 +18,13 @@ class DensityModel(Mobility):
     """
 
     def __init__(
-            self,
-            sigma0: float,
-            v: float,
-            k: float,
-            timestep: dt.timedelta,
-            eps: float = 1e-6,
-            sigma_min: float = 4.0,
+        self,
+        sigma0: float,
+        v: float,
+        k: float,
+        timestep: dt.timedelta,
+        eps: float = 1e-6,
+        sigma_min: float = 4.0,
     ):
         """Initialises the Gaussian density model with uncertainty parameters.
 
@@ -47,10 +48,10 @@ class DensityModel(Mobility):
     # Helper functions
     @staticmethod
     def _mean_position(
-            t: dt.datetime,
-            x_values: np.ndarray,
-            y_values: np.ndarray,
-            time_values: np.ndarray,
+        t: dt.datetime,
+        x_values: np.ndarray,
+        y_values: np.ndarray,
+        time_values: np.ndarray,
     ) -> tuple[float, float]:
         """Linear interpolation of position along the observed path at time t.
         Outside the observed range, returns the nearest endpoint.
@@ -82,8 +83,8 @@ class DensityModel(Mobility):
 
     @staticmethod
     def _delta_t_eff(
-            t: dt.datetime,
-            time_values: np.ndarray,
+        t: dt.datetime,
+        time_values: np.ndarray,
     ) -> float:
         """
         Effective time to nearest observation in seconds:
@@ -129,7 +130,7 @@ class DensityModel(Mobility):
 
         sigma2 = self.sigma0**2 + (self.v * dt_eff / self.k) ** 2
         sigma2 = max(sigma2, self.eps)
-        sigma2 = max(sigma2, self.sigma_min ** 2)
+        sigma2 = max(sigma2, self.sigma_min**2)
 
         r2 = (eval_x - mu_x) ** 2 + (eval_y - mu_y) ** 2
         norm = 1.0 / (2.0 * np.pi * sigma2)
@@ -138,7 +139,7 @@ class DensityModel(Mobility):
     def distribution(
         self,
         trajectory: Trajectory,
-        gdf_geometry: gpd.GeoDataFrame,
+        environment: Environment,
         bounds=None,
     ) -> gpd.GeoDataFrame:
         """
@@ -149,7 +150,7 @@ class DensityModel(Mobility):
         trajectory : Trajectory
             Observed positions and times.
         gdf_geometry : gpd.GeoDataFrame
-            Rasterised geometry use to define the evaluation coordinates.
+            Rasterised geometry used to define the evaluation coordinates.
         bounds : optional
             Passed to utils.get_gdf_centroids to spatially restrict evaluation.
 
@@ -161,14 +162,14 @@ class DensityModel(Mobility):
         """
         standard_deviations = 3
         buffer = self.sigma0 * standard_deviations
-        data = self._prepare_mobility_data(trajectory, gdf_geometry, bounds, buffer)
+        data = self._get_mobility_data(trajectory, environment, bounds, buffer)
 
         x, y, t, dt_seconds = data.x, data.y, data.t, data.dt
         mask = data.mask
         if len(x) == 0 or not np.any(mask):
             return data.zero_density_gdf
 
-        eval_centroids = data.eval_centroids
+        eval_centroids = data.eval_coords
         points = data.points
         density = data.zero_density_gdf.density.to_numpy().copy()
 
@@ -202,4 +203,3 @@ class DensityModel(Mobility):
             geometry=gdf_geometry.geometry,
             crs=gdf_geometry.crs,
         )
-

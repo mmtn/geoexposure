@@ -6,7 +6,8 @@ import numpy as np
 from geopandas import GeoDataFrame
 from shapely import Point
 
-from src import utils
+from src.data.Trajectory import Trajectory
+from src.models.Environment import Environment
 
 MAX_NUM_GRID_POINTS = 1e6
 
@@ -17,7 +18,7 @@ class MobilityData:
     y: np.ndarray
     t: np.ndarray
     dt: np.ndarray
-    eval_centroids: np.ndarray
+    eval_coords: np.ndarray
     points: list[Point]
     mask: np.ndarray
     zero_density_gdf: GeoDataFrame
@@ -31,11 +32,16 @@ class Mobility(ABC):
     # TODO: decide on possible methods for Mobility model
 
     @abstractmethod
-    def distribution(self, trajectory, gdf_geometry):
-        # This method is designed to be overridden by subclass implementations.
+    def distribution(
+        self,
+        trajectory: Trajectory,
+        environment: Environment,
+        bounds=None,
+    ) -> gpd.GeoDataFrame:
         pass
 
-    def _prepare_mobility_data(self, trajectory, gdf_geometry, bounds, buffer):
+    @staticmethod
+    def _get_mobility_data(trajectory, environment, bounds, buffer):
         """
 
         Args:
@@ -47,22 +53,18 @@ class Mobility(ABC):
         Returns:
             MobilityData
         """
-
         x, y, t, dt = trajectory.get_data_arrays()
-
-        all_centroids = utils.get_gdf_centroids(gdf_geometry, as_numpy=True)
-        all_x, all_y = all_centroids.transpose()
-        points = [Point(xy) for xy in zip(all_x, all_y)]
+        all_x, all_y = environment.centroids_np.transpose()
 
         # Default to zero density everywhere
-        zero_density = np.zeros(len(all_centroids))
+        zero_density = np.zeros(len(all_x))
         zero_density_gdf = gpd.GeoDataFrame(
             data={
                 "density": zero_density,
-                "point_geometry": points,
+                "point_geometry": environment.geometry_points,
             },
-            geometry=gdf_geometry.geometry,
-            crs=gdf_geometry.crs
+            geometry=environment.geometry_polygons,
+            crs=environment.crs,
         )
 
         # Compute bounds from trajectory extent if not provided
@@ -77,9 +79,9 @@ class Mobility(ABC):
         # Use bounds to get the subset of centroids to evaluate
         x_min, y_min, x_max, y_max = bounds
         mask = (all_x >= x_min) & (all_x <= x_max) & (all_y >= y_min) & (all_y <= y_max)
-        eval_centroids = all_centroids[mask]
+        eval_coords = environment.centroids_np[mask]
 
-        if len(eval_centroids) > MAX_NUM_GRID_POINTS:
+        if len(eval_coords) > MAX_NUM_GRID_POINTS:
             raise ValueError(f"Too many coordinates (max = {MAX_NUM_GRID_POINTS})")
 
         return MobilityData(
@@ -87,8 +89,8 @@ class Mobility(ABC):
             y=y,
             t=t,
             dt=dt,
-            eval_centroids=eval_centroids,
-            points=points,
+            eval_coords=eval_coords,
+            points=environment.geometry_points,
             mask=mask,
             zero_density_gdf=zero_density_gdf,
         )

@@ -14,7 +14,9 @@ def write_shape_file(gdf, path):
 
 CATEGORY_COLUMN = "land_use"
 CATEGORIES = ["forest", "fields", "built-up", "plantations"]
-custom_crs = "+proj=tmerc +lat_0=0 +lon_0=0 +k_0=1 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs"
+custom_crs = (
+    "+proj=tmerc +lat_0=0 +lon_0=0 +k_0=1 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs"
+)
 
 x_size = 1000  # metres
 y_size = 1000  # metres
@@ -33,8 +35,7 @@ polygon = affinity.scale(polygon, x_size / 2, y_size / 2)
 polygon = affinity.translate(polygon, xoff=x_size / 2, yoff=y_size / 2)
 
 geometries = [
-    affinity.translate(polygon, xoff=ii * x_size)
-    for ii in range(len(CATEGORIES))
+    affinity.translate(polygon, xoff=ii * x_size) for ii in range(len(CATEGORIES))
 ]
 
 gdf_original = gpd.GeoDataFrame(

@@ -31,7 +31,6 @@ class SpatialData:
         else:
             return df.to_string(index=False)
 
-
     def copy(self):
         new = self.__class__.__new__(self.__class__)
         new.gdf = None if self.gdf is None else self.gdf.copy()
@@ -100,8 +99,7 @@ class SpatialData:
 
     def set_weights(self, weights: list):
         self.metrics = {
-            metric: weight
-            for metric, weight in zip(self.metrics.keys(), weights)
+            metric: weight for metric, weight in zip(self.metrics.keys(), weights)
         }
         self._metrics_list = list(self.metrics.keys())
         self._metric_weights = list(self.metrics.values())

@@ -24,12 +24,7 @@ from src.data.Trajectory import DATETIME, X, Y
 
 
 def get_xyt(
-        start_time,
-        end_time,
-        frequency,
-        movement_speed,
-        max_x_value,
-        max_entries=1e6
+    start_time, end_time, frequency, movement_speed, max_x_value, max_entries=1e6
 ):
     x, y, t = list(), list(), list()
     x_movement = movement_speed * frequency.seconds
@@ -90,10 +85,12 @@ proportion_to_drop = 0.5
 removal_indices = np.random.choice(
     range(total_entries),
     int(np.ceil(total_entries * proportion_to_drop)),
-    replace=False
+    replace=False,
 )
 inconsistent_frequency_df = high_freq_df.copy().drop(removal_indices)
 
-inconsistent_frequency_df.to_csv("trajectories/01_inconsistent_frequency.csv", index=False)
+inconsistent_frequency_df.to_csv(
+    "trajectories/01_inconsistent_frequency.csv", index=False
+)
 high_freq_df.to_csv("trajectories/02_high_frequency.csv", index=False)
 low_freq_df.to_csv("trajectories/03_low_frequency.csv", index=False)

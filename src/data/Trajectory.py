@@ -21,11 +21,9 @@ MIN_ROWS = 3
 
 class Trajectory:
     def __init__(self, df: DataFrame):
-        assert (sorted(df.columns) == sorted(REQUIRED_COLUMNS)), \
-            "DataFrame must have columns 'datetime', 'x', 'y'"
-        assert (len(df) >= MIN_ROWS), \
-            f"DataFrame for a trajectory must have at least {MIN_ROWS} rows"
-
+        assert sorted(df.columns) == sorted(
+            REQUIRED_COLUMNS
+        ), "DataFrame must have columns 'datetime', 'x', 'y'"
         df[DATETIME] = pd.to_datetime(df[DATETIME], format="%Y-%m-%d %H:%M:%S")
         self.data = df
         self._add_dwell_times()
@@ -42,6 +40,11 @@ class Trajectory:
         return self.data[DATETIME].max()
 
     @property
+    def duration_in_seconds(self):
+        time_difference = self.data[DATETIME].max() - self.data[DATETIME].min()
+        return time_difference.total_seconds()
+
+    @property
     def coordinates(self):
         return np.array([self.data[X], self.data[Y]])
 
@@ -56,10 +59,7 @@ class Trajectory:
         clipped_end = interval_end.clip(upper=end)
         clipped_duration = clipped_end - clipped_start
         clipped_duration = (
-            clipped_duration
-            .dt.total_seconds()
-            .fillna(0.0)
-            .clip(lower=0.0)
+            clipped_duration.dt.total_seconds().fillna(0.0).clip(lower=0.0)
         )
 
         mask = clipped_duration > 0
@@ -114,10 +114,7 @@ class Trajectory:
         """
         For each requested time, return the row with the closest timestamp.
         """
-        indices = [
-            (self.data[DATETIME] - t).abs().argmin()
-            for t in times
-        ]
+        indices = [(self.data[DATETIME] - t).abs().argmin() for t in times]
         resampled = self.data.iloc[indices][REQUIRED_COLUMNS].copy()
         resampled[DATETIME] = times.values
         return resampled.reset_index(drop=True)
@@ -136,10 +133,9 @@ class Trajectory:
                 x = before[X]
                 y = before[Y]
             else:
-                weight = (
-                        (t - before[DATETIME]).total_seconds() /
-                        (after[DATETIME] - before[DATETIME]).total_seconds()
-                )
+                weight = (t - before[DATETIME]).total_seconds() / (
+                    after[DATETIME] - before[DATETIME]
+                ).total_seconds()
                 x = before[X] + weight * (after[X] - before[X])
                 y = before[Y] + weight * (after[Y] - before[Y])
 
@@ -153,7 +149,9 @@ class Trajectory:
         """
         x_values = self.data[X].to_numpy(dtype=float)
         y_values = self.data[Y].to_numpy(dtype=float)
-        t_values = self.data[DATETIME].to_numpy(dtype=np.datetime64) # array of datetime objects
+        t_values = self.data[DATETIME].to_numpy(
+            dtype=np.datetime64
+        )  # array of datetime objects
         dt_values = self.data[DWELL_TIME_SECONDS].to_numpy(dtype=float)
         order = np.argsort(t_values)
         return x_values[order], y_values[order], t_values[order], dt_values[order]

@@ -5,6 +5,7 @@ from tqdm import tqdm
 
 from src import utils
 from src.data.Trajectory import Trajectory
+from src.models.Environment import Environment
 from src.models.Mobility import MAX_NUM_GRID_POINTS, Mobility
 
 
@@ -15,10 +16,10 @@ class PointOverlay(Mobility):
         self.buffer = buffer
 
     def distribution(
-            self,
-            trajectory: Trajectory,
-            gdf_geometry: gpd.GeoDataFrame,
-            bounds=None
+        self,
+        trajectory: Trajectory,
+        environment: Environment,
+        bounds=None,
     ) -> gpd.GeoDataFrame:
         """Computes density by counting trajectory points within each polygon.
 
@@ -34,14 +35,14 @@ class PointOverlay(Mobility):
             count of trajectory points falling within each polygon.
         """
         buffer = self.buffer
-        data = self._prepare_mobility_data(trajectory, gdf_geometry, bounds, buffer)
+        data = self._get_mobility_data(trajectory, environment, bounds, buffer)
 
         x, y, t, dt = data.x, data.y, data.t, data.dt
         mask = data.mask
         if len(x) == 0 or not np.any(mask):
             return data.zero_density_gdf
 
-        eval_centroids = data.eval_centroids
+        eval_centroids = data.eval_coords
         points = data.points
         density = data.zero_density_gdf.density.to_numpy().copy()
 
@@ -50,14 +51,14 @@ class PointOverlay(Mobility):
         # Build shapely points from trajectory coordinates
         trajectory_points = gpd.GeoDataFrame(
             geometry=gpd.points_from_xy(x, y),
-            crs=gdf_geometry.crs,
+            crs=environment.crs,
         )
 
         # Spatial join — each trajectory point is matched to the polygon it
         # falls within
         joined = gpd.sjoin(
             trajectory_points,
-            gdf_geometry[mask].reset_index(names="geometry_index"),
+            environment.geometry_polygons[mask].reset_index(names="geometry_index"),
             how="inner",
             predicate="within",
         )
@@ -73,7 +74,6 @@ class PointOverlay(Mobility):
                 "density": density,
                 "point_geometry": points,
             },
-            geometry=gdf_geometry.geometry,
-            crs=gdf_geometry.crs,
+            geometry=environment.geometry_polygons,
+            crs=environment.crs,
         )
-

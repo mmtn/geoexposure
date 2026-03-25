@@ -8,7 +8,7 @@ from src.utils import get_cyclic_timestamp, REFERENCE_TIME
 # Helpers
 # ---------------------------------------------------------------------------
 
-ONE_DAY  = dt.timedelta(days=1)
+ONE_DAY = dt.timedelta(days=1)
 ONE_HOUR = dt.timedelta(hours=1)
 days_in_ref_year = 366 if calendar.isleap(REFERENCE_TIME.year) else 365
 ONE_YEAR = dt.timedelta(days=days_in_ref_year)
@@ -22,6 +22,7 @@ def assert_in_cycle(result, cycle_duration):
 # ===========================================================================
 # dt.time inputs
 # ===========================================================================
+
 
 class TestTimeInput:
 
@@ -58,6 +59,7 @@ class TestTimeInput:
 # ===========================================================================
 # dt.date inputs
 # ===========================================================================
+
 
 class TestDateInput:
 
@@ -101,6 +103,7 @@ class TestDateInput:
         to a non-leap year to exercise this branch.
         """
         from src import utils
+
         original = utils.REFERENCE_TIME
         try:
             utils.REFERENCE_TIME = original.replace(year=2019)
@@ -115,6 +118,7 @@ class TestDateInput:
 # dt.datetime inputs
 # ===========================================================================
 
+
 class TestDatetimeInput:
 
     def test_reference_time_itself(self):
@@ -123,12 +127,8 @@ class TestDatetimeInput:
         assert result == REFERENCE_TIME
 
     def test_mid_year_datetime(self):
-        result = get_cyclic_timestamp(
-            dt.datetime(2025, 6, 15, 14, 30, 0), ONE_YEAR
-        )
-        expected = REFERENCE_TIME.replace(
-            month=6, day=15, hour=14, minute=30, second=0
-        )
+        result = get_cyclic_timestamp(dt.datetime(2025, 6, 15, 14, 30, 0), ONE_YEAR)
+        expected = REFERENCE_TIME.replace(month=6, day=15, hour=14, minute=30, second=0)
         assert result == expected
 
     def test_year_is_normalised_to_reference_year(self):
@@ -158,6 +158,7 @@ class TestDatetimeInput:
 # cycle_duration validation
 # ===========================================================================
 
+
 class TestCycleDurationValidation:
 
     def test_zero_cycle_duration_raises(self):
@@ -172,6 +173,7 @@ class TestCycleDurationValidation:
 # ===========================================================================
 # Invalid input types
 # ===========================================================================
+
 
 class TestInvalidInputType:
 
@@ -190,4 +192,3 @@ class TestInvalidInputType:
     def test_float_raises_value_error(self):
         with pytest.raises(ValueError, match="unknown timestamp type"):
             get_cyclic_timestamp(3.14, ONE_DAY)
-

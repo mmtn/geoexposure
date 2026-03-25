@@ -4,22 +4,24 @@ import numpy as np
 from src.Enums import TemporalType
 from src.data.SpatialData import SpatialData
 
-from src.utils import (REFERENCE_TIME, check_iter_types, get_cyclic_timestamp,
-                       match_datetime_in_list, round_datetime)
+from src.utils import (
+    REFERENCE_TIME,
+    check_iter_types,
+    get_cyclic_timestamp,
+    match_datetime_in_list,
+    round_datetime,
+)
 
 
 class TemporalData:
-    VALID_TYPES = (
-        float,
-        SpatialData
-    )
+    VALID_TYPES = (float, SpatialData)
 
     def __init__(
-            self,
-            time_data_dict,
-            cycle_duration=None,
-            temporal_resolution=None,
-            temporal_type=None
+        self,
+        time_data_dict,
+        cycle_duration=None,
+        temporal_resolution=None,
+        temporal_type=None,
     ):
         # Set from arguments
         self.cycle_duration = cycle_duration
@@ -55,16 +57,21 @@ class TemporalData:
                 for ts in self.timestamps
             ]
             if self.cycle_duration is None:
-                raise ValueError("cycle duration must be defined for TemporalType.CYCLIC")
+                raise ValueError(
+                    "cycle duration must be defined for TemporalType.CYCLIC"
+                )
             if self.cycle_duration < (max(temp) - min(temp)):
-                raise ValueError("cycle duration must be longer than time between points")
+                raise ValueError(
+                    "cycle duration must be longer than time between points"
+                )
 
-        if self.temporal_type is TemporalType.DATED and self.timestamp_type is dt.datetime:
+        if (
+            self.temporal_type is TemporalType.DATED
+            and self.timestamp_type is dt.datetime
+        ):
             raise ValueError(
                 "'time_data_dict' keys must be dt.datetime for TemporalType.DATED"
             )
-
-
 
     def sample(self, timestamp, method="nearest"):
         if self.temporal_type is TemporalType.CYCLIC:
@@ -72,10 +79,7 @@ class TemporalData:
 
         if method == "nearest":
             dt_nearest = match_datetime_in_list(
-                timestamp,
-                self._datetime,
-                self.cycle_duration,
-                to=method
+                timestamp, self._datetime, self.cycle_duration, to=method
             )
             return self._get_value_by_key(dt_nearest)
         elif method == "interp":
@@ -119,8 +123,7 @@ class TemporalData:
     def _timestamps_to_datetime(self):
         if self.temporal_type == TemporalType.CYCLIC:
             self._datetime = [
-                get_cyclic_timestamp(ts, self.cycle_duration)
-                for ts in self.timestamps
+                get_cyclic_timestamp(ts, self.cycle_duration) for ts in self.timestamps
             ]
         elif self.temporal_type == TemporalType.DATED:
             self._datetime = self.timestamps
@@ -135,23 +138,14 @@ class TemporalData:
         self.timestamps = [timestamps_in[ii] for ii in sorting]
         self.data = [data_in[ii] for ii in sorting]
         self._timestamps_to_datetime()
-        self._dict = {
-            key: value
-            for key, value in zip(self._datetime, self.data)
-        }
+        self._dict = {key: value for key, value in zip(self._datetime, self.data)}
 
     def _get_value_interpolated(self, datetime):
         dt_previous = match_datetime_in_list(
-            datetime,
-            self._datetime,
-            self.cycle_duration,
-            to="floor"
+            datetime, self._datetime, self.cycle_duration, to="floor"
         )
         dt_next = match_datetime_in_list(
-            datetime,
-            self._datetime,
-            self.cycle_duration,
-            to="ceil"
+            datetime, self._datetime, self.cycle_duration, to="ceil"
         )
         prev_value = self._get_value_by_key(dt_previous)
         next_value = self._get_value_by_key(dt_next)

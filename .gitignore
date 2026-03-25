@@ -7,3 +7,6 @@
 /data
 src/tests/data/gis
 src/tests/data/trajectories
+
+# Cache
+.cache  

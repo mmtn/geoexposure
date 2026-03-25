@@ -1,8 +1,8 @@
 import datetime as dt
+import warnings
 
 import numpy as np
 import pandas as pd
-from matplotlib import pyplot as plt
 
 from src import utils
 from src.data.Trajectory import Trajectory
@@ -11,14 +11,14 @@ from src.models.Mobility import Mobility
 
 
 def calculate_exposure(
-        trajectory: Trajectory,
-        mobility: Mobility,
-        environment: Environment,
-        start_time: dt.datetime = None,
-        end_time: dt.datetime = None,
-        temporal_resolution: dt.timedelta = None,
-        env_sampling_method: str = "interp",
-        return_snapshots: bool = False
+    trajectory: Trajectory,
+    mobility: Mobility,
+    environment: Environment,
+    start_time: dt.datetime = None,
+    end_time: dt.datetime = None,
+    temporal_resolution: dt.timedelta = None,
+    env_sampling_method: str = "interp",
+    return_snapshots: bool = False,
 ):
     if start_time is None:
         start_time = trajectory.data["datetime"].min()
@@ -27,10 +27,7 @@ def calculate_exposure(
         end_time = trajectory.data["datetime"].max()
 
     # Sample at highest frequency provided
-    resolutions = (
-        temporal_resolution,
-        environment.temporal_resolution
-    )
+    resolutions = (temporal_resolution, environment.temporal_resolution)
 
     temporal_resolution = min(res for res in resolutions if res is not None)
 
@@ -52,21 +49,32 @@ def calculate_exposure(
     print(f"{num_windows} windows")
 
     for ii, (start, end) in enumerate(windows):
+
+        if start < trajectory.start_time:
+            start = trajectory.start_time
+
+        if end > trajectory.end_time:
+            end = trajectory.end_time
+
         window = trajectory.data_in_window(start, end)
+        if len(window) == 0:
+            warnings.warn(f"Window {ii + 1:<5d}|   {start} - {end}   |   NO DATA")
+            continue
         length = end - start
         durations[ii] = length.total_seconds()
         centres.append(start + length / 2)
 
-        rho = mobility.distribution(window, environment.gdf_raster)
+        rho = mobility.distribution(window, environment)
         exposure_sources = environment.sample(centres[ii], method=env_sampling_method)
-        scaling[ii] = environment._scaling_factors(centres[ii], method=env_sampling_method)
-        normalised_density = rho.density / rho.density.sum()
-        snapshot_ii = exposure_sources.drop(
-            columns=["geometry"]
-        ).mul(
-            normalised_density,
-            axis=0
+        scaling[ii] = environment._scaling_factors(
+            centres[ii], method=env_sampling_method
         )
+        normalised_density = rho.density / rho.density.sum()
+        snapshot_ii = (
+            exposure_sources.drop(columns=["geometry"]).mul(normalised_density, axis=0)
+            * durations[ii]
+        )
+        # Multiply by window duration to get seconds of exposure to each environment
         sums_ii = snapshot_ii.sum()
         snapshot_sums.append(sums_ii)
 
@@ -88,3 +96,37 @@ def calculate_exposure(
         return summary_df, snapshots
     else:
         return summary_df
+
+
+def exposure_sums(
+    trajectories: list[Trajectory],
+    mobility: Mobility,
+    environment: Environment,
+    timestep=None,
+    per_second=False,
+):
+
+    results = list()
+
+    for trajectory in trajectories:
+
+        exposure_df = calculate_exposure(
+            trajectory,
+            mobility,
+            environment,
+            temporal_resolution=timestep,
+            return_snapshots=False,
+        )
+        df_exposure_only = exposure_df.loc[
+            :,
+            ~exposure_df.columns.isin(["geometry", "scaling"])
+            & ~exposure_df.columns.str.startswith("window"),
+        ]
+        exposure_sum = df_exposure_only.sum()
+        if per_second:
+            results.append(exposure_sum / trajectory.duration_in_seconds)
+        else:
+            results.append(exposure_sum)
+
+    df = pd.DataFrame(results)
+    return df

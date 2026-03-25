@@ -5,25 +5,30 @@ import numpy as np
 import pandas as pd
 from geopandas import GeoDataFrame
 
+from src.EnableCaching import EnableCaching
 from src.data.SpatialData import SpatialData
-from src.utils import get_cyclic_timestamp, raster
+from src.utils import get_cyclic_timestamp, get_gdf_centroids, raster
 
 
-class Environment:
+class Environment(EnableCaching):
     EXPOSURE_COLUMN = "exposure"
+    cache_dir = ".cache/environment"
 
     def __init__(
-            self,
-            spatial_resolution,
-            spatial_data: dict = None,
-            temporal_data: dict = None,
-            spatial_reference_data=None
+        self,
+        spatial_resolution,
+        spatial_data: dict = None,
+        temporal_data: dict = None,
+        spatial_reference_data=None,
     ):
         self.spatial_data = spatial_data if spatial_data is not None else None
         self.temporal_data = temporal_data if temporal_data is not None else None
         self.spatial_resolution = spatial_resolution
         self.spatial_reference_data = spatial_reference_data
         self.gdf_raster = self._calculate_raster()
+        self.geometry_points, self.centroids_np = get_gdf_centroids(self.gdf_raster)
+        self.geometry_polygons = self.gdf_raster.geometry
+        self.crs = self.gdf_raster.crs
         self._calculated = False
         self._set_temporal_resolution()
 
@@ -31,7 +36,10 @@ class Environment:
         spatial = ""
         for name, data in self.spatial_data.items():
             spatial += f"{name}\n"
-            spatial += f"{data}"
+            spatial += f"{data}\n"
+
+        if self.temporal_data is None:
+            return f"Spatial:\n{spatial}"
 
         temporal = ""
         for name, data in self.temporal_data.items():
@@ -42,6 +50,7 @@ class Environment:
                 if data.data_type is float:
                     temporal += f"{k}: {v}\n"
             temporal += "\n"
+
         return f"Spatial:\n{spatial}\n\nTemporal:\n{temporal}"
 
     def save(self, filename):
@@ -68,6 +77,19 @@ class Environment:
                 spatial.calculate(self.gdf_raster.copy())
 
         self._calculated = True
+
+    def columns(self):
+        temporal_data = self.temporal_data if self.temporal_data is not None else {}
+        columns = list()
+
+        for key, spatial in self.spatial_data.items():
+            for metric, weight in spatial.metrics.items():
+                columns.append(f"{key}_{metric.name}")
+
+        for key, temporal in temporal_data.items():
+            columns.append(f"temporal_{key}")
+
+        return columns
 
     def get_spatial_exposure(self) -> GeoDataFrame:
         spatial_total = self.gdf_raster.copy()
@@ -103,7 +125,7 @@ class Environment:
         merged = gpd.GeoDataFrame(
             pd.concat([gdf_sample, spatial, temporal], axis=1),
             geometry="geometry",
-            crs=gdf_sample.crs
+            crs=gdf_sample.crs,
         )
 
         return merged
@@ -122,9 +144,10 @@ class Environment:
             return np.prod(scaling_factors)
 
     def _calculate_raster(self):
-        return raster(
-            self.spatial_reference_data.gdf,
-            self.spatial_resolution
+        return self._get_or_compute(
+            fn=raster,
+            args=(self.spatial_reference_data.gdf, self.spatial_resolution),
+            label="raster",
         )
 
     def _set_temporal_resolution(self):
@@ -132,13 +155,13 @@ class Environment:
             self.temporal_resolution = None
         else:
             self.temporal_resolution = np.min(
-                [
-                    data.temporal_resolution
-                    for data in self.temporal_data.values()
-                ]
+                [data.temporal_resolution for data in self.temporal_data.values()]
             )
 
-    def plot(self, datetime=None, method="nearest", **kwargs):
+    def plot_exposure(self, datetime=None, method="nearest", **kwargs):
+        if not self._calculated:
+            print("run 'calculate()' before 'plot_exposure()'")
+
         exposure = self.get_spatial_exposure()
         if datetime is None:
             title = "Spatial data only - no temporal variation shown"
@@ -151,7 +174,7 @@ class Environment:
             return None
 
         gdf_plot = self.gdf_raster.copy()
-        gdf_plot[self.EXPOSURE_COLUMN] = exposure
+        gdf_plot[self.EXPOSURE_COLUMN] = exposure.sum(axis=1)
         ax = gdf_plot.plot(column=self.EXPOSURE_COLUMN, **kwargs)
         ax.set_title(title)
         return ax

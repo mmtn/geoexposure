@@ -15,6 +15,9 @@ class Proximity(Metric):
 
     def _calculate_metric(self, gdf_input, gdf_raster):
         if self.column is not None and self.value is not None:
+            assert (
+                self.value in gdf_input[self.column].values
+            ), f"value '{self.value}' not found in '{self.column}' column"
             gdf_to = gdf_input[gdf_input[self.column] == self.value]
         else:
             gdf_to = gdf_input
@@ -38,6 +41,9 @@ class ProximityRisk(Metric):
 
     def _calculate_metric(self, gdf_input, gdf_raster):
         if self.column is not None and self.value is not None:
+            assert (
+                self.value in gdf_input[self.column].values
+            ), f"value '{self.value}' not found in '{self.column}' column"
             gdf_to = gdf_input[gdf_input[self.column] == self.value]
         else:
             gdf_to = gdf_input

@@ -15,29 +15,17 @@ from src.data.Trajectory import Trajectory
 #
 
 REFERENCE_TIME = dt.datetime(
-    year=2020,
-    month=1,
-    day=1,
-    hour=0,
-    minute=0,
-    second=0,
-    microsecond=0
+    year=2020, month=1, day=1, hour=0, minute=0, second=0, microsecond=0
 )
 
-HOURLY = [
-    dt.time(hour=h)
-    for h in range(24)
-]
+HOURLY = [dt.time(hour=h) for h in range(24)]
 
 DAILY = [
     dt.date(year=REFERENCE_TIME.year, month=1, day=1) + ii * dt.timedelta(days=1)
     for ii in range(366)
 ]
 
-MONTHLY = [
-    dt.date(year=REFERENCE_TIME.year, month=(m + 1), day=1)
-    for m in range(12)
-]
+MONTHLY = [dt.date(year=REFERENCE_TIME.year, month=(m + 1), day=1) for m in range(12)]
 
 
 def metric_name(metric, args, join_str="_"):
@@ -94,14 +82,16 @@ def get_times(start_time, end_time, delta):
     num_times = int((end_new - start_new) / delta)
     return [start_new + (ii * delta) for ii in range(num_times)]
 
+
 def get_time_windows(start_time, end_time, delta):
     start_new = round_datetime(start_time, delta, to="floor")
     end_new = round_datetime(end_time, delta, to="ceil")
     num_times = int((end_new - start_new) / delta)
     return [
         (start_new + (ii * delta), start_new + ((ii + 1) * delta))
-        for ii in range(num_times - 1)
+        for ii in range(num_times)
     ]
+
 
 def check_iter_types(iterable, data_type):
     return all(isinstance(item, data_type) for item in iterable)
@@ -165,28 +155,23 @@ def get_cyclic_timestamp(dt_input, cycle_duration):
     if cycle_duration.total_seconds() <= 0:
         raise ValueError("cycle duration must be greater than 0")
 
-
-
     if isinstance(dt_input, dt.time):
         ts = REFERENCE_TIME.replace(
-            hour=dt_input.hour,
-            minute=dt_input.minute,
-            second=dt_input.second
+            hour=dt_input.hour, minute=dt_input.minute, second=dt_input.second
         )
 
     elif isinstance(dt_input, dt.date) and not isinstance(dt_input, dt.datetime):
         day = dt_input.day
 
         # Clamp Feb 29 to Feb 28 if the reference year is not a leap year
-        if dt_input.month == 2 and day == 29 and not calendar.isleap(
-                REFERENCE_TIME.year
-                ):
+        if (
+            dt_input.month == 2
+            and day == 29
+            and not calendar.isleap(REFERENCE_TIME.year)
+        ):
             day = 28
 
-        ts = REFERENCE_TIME.replace(
-            month=dt_input.month,
-            day=day
-        )
+        ts = REFERENCE_TIME.replace(month=dt_input.month, day=day)
 
     elif isinstance(dt_input, dt.datetime):
         ts = REFERENCE_TIME.replace(
@@ -194,7 +179,7 @@ def get_cyclic_timestamp(dt_input, cycle_duration):
             day=dt_input.day,
             hour=dt_input.hour,
             minute=dt_input.minute,
-            second=dt_input.second
+            second=dt_input.second,
         )
 
     else:
@@ -290,14 +275,12 @@ def read_csv_directory(data_directory, max_files=np.inf):
     ]
 
 
-def get_gdf_centroids(gdf: gpd.GeoDataFrame, bounds=None, as_numpy=False):
+def get_gdf_centroids(gdf: gpd.GeoDataFrame, bounds=None):
     if bounds is not None:
         gdf = gdf.clip(bounds)
     points = [geom.centroid for geom in gdf.geometry]
-    if as_numpy:
-        return np.array([[point.x, point.y] for point in points])
-    else:
-        return points
+    points_np = np.array([[point.x, point.y] for point in points])
+    return points, points_np
 
 
 def calculate_gdf_proximity(gdf_from, gdf_to):
@@ -305,20 +288,17 @@ def calculate_gdf_proximity(gdf_from, gdf_to):
         raise ValueError("Inputs must be GeoDataFrames with 'geometry' column")
 
     if all(isinstance(x, Polygon) for x in gdf_from.geometry):
-        gdf_from["geometry"] = get_gdf_centroids(gdf_from)
+        gdf_from["geometry"], _ = get_gdf_centroids(gdf_from)
 
     if not all(isinstance(x, Point) for x in gdf_from.geometry):
         raise ValueError("'from' geometries must be Points")
 
     # Spatial join to find the nearest geometry in gdf_to for each geometry in gdf_from
     joined = gpd.sjoin_nearest(
-        gdf_from,
-        gdf_to[['geometry']],
-        how='left',
-        distance_col='distance'
+        gdf_from, gdf_to[["geometry"]], how="left", distance_col="distance"
     )
 
-    return joined['distance'].to_list()
+    return joined["distance"].to_list()
 
 
 def proximity_to_risk(distances, threshold, shape=4.0):
