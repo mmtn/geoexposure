@@ -1,24 +1,20 @@
 import datetime as dt
 import numpy as np
 
-from src import SpatialData, TemporalTypeEnum
-
-from src.utils import (
-    check_iter_types,
-    get_cyclic_timestamp,
-    match_datetime_in_list,
-)
+from .SpatialData import SpatialData
+from ..enums import TemporalType
+from ..utils import check_iter_types, get_cyclic_timestamp, match_datetime_in_list
 
 
 class TemporalData:
     VALID_TYPES = (float, SpatialData)
 
     def __init__(
-        self,
-        time_data_dict: dict,
-        cycle_duration: dt.timedelta | None = None,
-        temporal_resolution: dt.timedelta | None = None,
-        temporal_type: TemporalTypeEnum = None,
+            self,
+            time_data_dict: dict,
+            cycle_duration: dt.timedelta | None = None,
+            temporal_resolution: dt.timedelta | None = None,
+            temporal_type: TemporalType = None,
     ):
         # Set from arguments
         self.cycle_duration = cycle_duration
@@ -48,7 +44,7 @@ class TemporalData:
         if len(self.data) <= 1:
             raise ValueError("multiple time points must be provided for TemporalData")
 
-        if self.temporal_type is TemporalTypeEnum.CYCLIC:
+        if self.temporal_type is TemporalType.CYCLIC:
             temp = [
                 get_cyclic_timestamp(ts, dt.timedelta(days=366))
                 for ts in self.timestamps
@@ -63,17 +59,17 @@ class TemporalData:
                 )
 
         if (
-            self.temporal_type is TemporalTypeEnum.DATED
-            and self.timestamp_type is dt.datetime
+                self.temporal_type is TemporalType.DATED
+                and self.timestamp_type is dt.datetime
         ):
             raise ValueError(
                 "'time_data_dict' keys must be dt.datetime for TemporalType.DATED"
             )
 
     def sample(
-        self, timestamp: dt.datetime, method: str = "nearest"
+            self, timestamp: dt.datetime, method: str = "nearest"
     ) -> SpatialData | float:
-        if self.temporal_type is TemporalTypeEnum.CYCLIC:
+        if self.temporal_type is TemporalType.CYCLIC:
             timestamp = get_cyclic_timestamp(timestamp, self.cycle_duration)
 
         if method == "nearest":
@@ -120,11 +116,11 @@ class TemporalData:
         self.temporal_resolution = temporal_resolution
 
     def _timestamps_to_datetime(self):
-        if self.temporal_type == TemporalTypeEnum.CYCLIC:
+        if self.temporal_type == TemporalType.CYCLIC:
             self._datetime = [
                 get_cyclic_timestamp(ts, self.cycle_duration) for ts in self.timestamps
             ]
-        elif self.temporal_type == TemporalTypeEnum.DATED:
+        elif self.temporal_type == TemporalType.DATED:
             self._datetime = self.timestamps
         else:
             raise ValueError(f"unknown TemporalType: {self.temporal_type}")

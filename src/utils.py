@@ -10,7 +10,7 @@ import pandas as pd
 from shapely import Polygon, Point
 from tqdm import tqdm
 
-from src import Trajectory
+from .data.Trajectory import Trajectory
 
 #
 
@@ -276,7 +276,7 @@ def read_csv_directory(data_directory: str, max_files: int | float = np.inf):
         if file.endswith("csv")
     ]
     return [
-        Trajectory(pd.read_csv(csv))
+        Trajectory(pd.read_csv(csv), csv_file=os.path.basename(csv))
         for file_num, csv in enumerate(csv_files)
         if file_num < max_files
     ]

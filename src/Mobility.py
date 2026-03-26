@@ -5,7 +5,8 @@ import geopandas as gpd
 import numpy as np
 from shapely import Point
 
-from src import Trajectory, Environment
+from . import Environment
+from .data import Trajectory
 
 MAX_NUM_GRID_POINTS = 1e6
 

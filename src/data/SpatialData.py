@@ -42,7 +42,7 @@ class SpatialData:
         new._calculated = self._calculated
         return new
 
-    def calculate(self, gdf_raster: gpd.GeoDataFarme):
+    def calculate(self, gdf_raster: gpd.GeoDataFrame):
         self.gdf_metrics = gdf_raster.copy()
         for metric in self._metrics_list:
             self.gdf_metrics[metric.name] = metric.calculate(self.gdf, gdf_raster)

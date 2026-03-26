@@ -4,7 +4,8 @@ import geopandas as gpd
 import numpy as np
 from tqdm import tqdm
 
-from src import Trajectory, Environment, Mobility
+from .. import Environment, Mobility
+from ..data import Trajectory
 
 
 class DensityModel(Mobility):

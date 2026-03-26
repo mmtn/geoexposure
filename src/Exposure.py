@@ -4,7 +4,8 @@ import warnings
 import numpy as np
 import pandas as pd
 
-from src import Trajectory, Mobility, Environment, utils
+from . import Mobility, Environment, utils
+from .data import Trajectory
 
 
 def calculate_exposure(
@@ -48,24 +49,26 @@ def calculate_exposure(
     for ii, (start, end) in enumerate(windows):
 
         if start < trajectory.start_time:
-            start = trajectory.start_time
+            start = trajectory.start_time.to_pydatetime()
 
         if end > trajectory.end_time:
-            end = trajectory.end_time
+            end = trajectory.end_time.to_pydatetime()
 
         window = trajectory.data_in_window(start, end)
-        if len(window) == 0:
-            warnings.warn(f"Window {ii + 1:<5d}|   {start} - {end}   |   NO DATA")
-            continue
         length = end - start
         durations[ii] = length.total_seconds()
         centres.append(start + length / 2)
 
-        rho = mobility.distribution(window, environment)
-        exposure_sources = environment.sample(centres[ii], method=env_sampling_method)
         scaling[ii] = environment._scaling_factors(
             centres[ii], method=env_sampling_method
         )
+
+        if len(window) == 0:
+            print(f"Window {ii + 1:<5d}|   {start} - {end}   |   NO DATA [WARNING]")
+            continue
+
+        rho = mobility.distribution(window, environment)
+        exposure_sources = environment.sample(centres[ii], method=env_sampling_method)
         normalised_density = rho.density / rho.density.sum()
         snapshot_ii = (
             exposure_sources.drop(columns=["geometry"]).mul(normalised_density, axis=0)
@@ -102,6 +105,7 @@ def exposure_sums(
     timestep: dt.datetime = None,
     per_second: bool = False,
 ) -> pd.DataFrame:
+
     results = list()
 
     for trajectory in trajectories:
@@ -120,9 +124,9 @@ def exposure_sums(
         ]
         exposure_sum = df_exposure_only.sum()
         if per_second:
-            results.append(exposure_sum / trajectory.duration_in_seconds)
-        else:
-            results.append(exposure_sum)
+            exposure_sum / trajectory.duration_in_seconds
+        exposure_sum["filename"] = trajectory.csv_file
+        results.append(exposure_sum)
 
     df = pd.DataFrame(results)
     return df

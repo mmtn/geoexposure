@@ -17,23 +17,24 @@ REQUIRED_COLUMNS = [
 
 
 class Trajectory:
-    def __init__(self, df: pd.DataFrame):
+    def __init__(self, df: pd.DataFrame, csv_file: str = None):
         assert sorted(df.columns) == sorted(
             REQUIRED_COLUMNS
         ), "DataFrame must have columns 'datetime', 'x', 'y'"
         df[DATETIME] = pd.to_datetime(df[DATETIME], format="%Y-%m-%d %H:%M:%S")
         self.data = df
+        self.csv_file = csv_file
         self._add_dwell_times()
 
     def __len__(self):
         return len(self.data)
 
     @property
-    def start_time(self) -> dt.datetime:
+    def start_time(self) -> pd.Timestamp:
         return self.data[DATETIME].min()
 
     @property
-    def end_time(self) -> dt.datetime:
+    def end_time(self) -> pd.Timestamp:
         return self.data[DATETIME].max()
 
     @property
@@ -131,7 +132,7 @@ class Trajectory:
                 y = before[Y]
             else:
                 weight = (t - before[DATETIME]).total_seconds() / (
-                    after[DATETIME] - before[DATETIME]
+                        after[DATETIME] - before[DATETIME]
                 ).total_seconds()
                 x = before[X] + weight * (after[X] - before[X])
                 y = before[Y] + weight * (after[Y] - before[Y])

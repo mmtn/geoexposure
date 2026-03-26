@@ -5,12 +5,12 @@ import geopandas as gpd
 import numpy as np
 import pandas as pd
 
-from Caching import EnableCaching
-from src import SpatialData
-from src.utils import get_gdf_centroids, raster
+from src.Caching import Caching
+from .data.SpatialData import SpatialData
+from .utils import get_gdf_centroids, raster
 
 
-class Environment(EnableCaching):
+class Environment(Caching):
     EXPOSURE_COLUMN = "exposure"
     cache_dir = ".cache/environment"
 

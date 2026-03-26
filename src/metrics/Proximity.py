@@ -5,8 +5,8 @@ import numpy as np
 import pandas as pd
 from shapely import Point, Polygon
 
-from Metric import Metric
-from src.utils import get_gdf_centroids, metric_name
+from .Metric import Metric
+from ..utils import get_gdf_centroids, metric_name
 
 
 class Proximity(Metric):

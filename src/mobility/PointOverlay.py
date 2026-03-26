@@ -1,8 +1,8 @@
 import geopandas as gpd
 import numpy as np
 
-from src import Trajectory, Environment, Mobility
-
+from .. import Environment, Mobility
+from ..data import Trajectory
 
 class PointOverlay(Mobility):
 

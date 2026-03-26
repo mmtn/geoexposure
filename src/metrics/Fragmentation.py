@@ -1,7 +1,7 @@
 from typing import Any
 
-from Metric import Metric
-from src.utils import metric_name
+from .Metric import Metric
+from ..utils import metric_name
 
 import geopandas as gpd
 

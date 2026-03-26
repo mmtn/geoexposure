@@ -2,8 +2,8 @@ import geopandas as gpd
 import numpy as np
 from sklearn.neighbors import KernelDensity
 
-from src import Trajectory, Environment, Mobility
-
+from .. import Environment, Mobility
+from ..data import Trajectory
 
 class KDE(Mobility):
     def __init__(self, kernel: str, bandwidth: float):

@@ -7,7 +7,7 @@ import geopandas as gpd
 import numpy as np
 
 
-class EnableCaching:
+class Caching:
     """Mixin providing general-purpose disk caching for any callable result.
 
     Classes using this mixin can cache and retrieve any pickleable object
