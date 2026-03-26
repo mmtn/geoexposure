@@ -42,7 +42,7 @@ class Mobility(ABC):
     @staticmethod
     def _get_mobility_data(
         trajectory: Trajectory, environment: Environment, bounds: tuple, buffer: float
-    ) -> MobilityData:
+    ) -> MobilityData | None:
         """
 
         Args:
@@ -54,10 +54,9 @@ class Mobility(ABC):
         Returns:
             MobilityData
         """
-        x, y, t, dt = trajectory.get_data_arrays()
-        all_x, all_y = environment.centroids_np.transpose()
 
         # Default to zero density everywhere
+        all_x, all_y = environment.centroids_np.transpose()
         zero_density = np.zeros(len(all_x))
         zero_density_gdf = gpd.GeoDataFrame(
             data={
@@ -67,6 +66,10 @@ class Mobility(ABC):
             geometry=environment.geometry_polygons,
             crs=environment.crs,
         )
+
+        x, y, t, dt = trajectory.get_data_arrays()
+        if len(x) == 0:
+            return zero_density_gdf
 
         # Compute bounds from trajectory extent if not provided
         if bounds is None:

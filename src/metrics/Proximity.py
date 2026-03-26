@@ -6,22 +6,26 @@ import pandas as pd
 from shapely import Point, Polygon
 
 from .Metric import Metric
-from ..utils import get_gdf_centroids, metric_name
+from ..utils import get_gdf_centroids
 
 
 class Proximity(Metric):
-    NAME = "proximity"
+    metric_title = "proximity"
 
-    def __init__(self, column=None, value=None):
+    def __init__(
+            self,
+            column: str | None = None,
+            value: int | float | None = None,
+            ):
         super().__init__()
         self.column = column
         self.value = value
-        self.name = metric_name(self.NAME, (self.column, self.value))
+        self.name = self.get_name(self.column, self.value)
 
     def _calculate_metric(self, gdf_input, gdf_raster):
         if self.column is not None and self.value is not None:
             assert (
-                self.value in gdf_input[self.column].values
+                    self.value in gdf_input[self.column].values
             ), f"value '{self.value}' not found in '{self.column}' column"
             gdf_to = gdf_input[gdf_input[self.column] == self.value]
         else:
@@ -35,27 +39,27 @@ class Proximity(Metric):
 
 
 class ProximityRisk(Metric):
-    NAME = "proximity_risk"
+    metric_title = "proximity_risk"
 
     def __init__(
-        self,
-        column: str | None = None,
-        value: Any | None = None,
-        threshold: float | None = None,
+            self,
+            column: str | None = None,
+            value: Any | None = None,
+            threshold: float | None = None,
     ):
         super().__init__()
         self.column = column
         self.value = value
         self.threshold = threshold
-        self.name = metric_name(self.NAME, (self.column, self.value))
+        self.name = self.get_name(self.column, self.value, self.threshold)
 
     def _calculate_metric(
-        self, gdf_input: gpd.GeoDataFrame, gdf_raster: gpd.GeoDataFrame
+            self, gdf_input: gpd.GeoDataFrame, gdf_raster: gpd.GeoDataFrame
     ):
         # TODO: remove duplication of code
         if self.column is not None and self.value is not None:
             assert (
-                self.value in gdf_input[self.column].values
+                    self.value in gdf_input[self.column].values
             ), f"value '{self.value}' not found in '{self.column}' column"
             gdf_to = gdf_input[gdf_input[self.column] == self.value]
         else:
@@ -71,7 +75,7 @@ class ProximityRisk(Metric):
 
 # Helper functions
 def calculate_gdf_proximity(
-    gdf_from: gpd.GeoDataFrame, gdf_to: gpd.GeoDataFrame
+        gdf_from: gpd.GeoDataFrame, gdf_to: gpd.GeoDataFrame
 ) -> list:
     if not all(isinstance(x, gpd.GeoDataFrame) for x in (gdf_from, gdf_to)):
         raise ValueError("Inputs must be GeoDataFrames with 'geometry' column")
@@ -91,7 +95,7 @@ def calculate_gdf_proximity(
 
 
 def proximity_to_risk(
-    distances: pd.Series, threshold: float, shape: float = 4.0
+        distances: pd.Series, threshold: float, shape: float = 4.0
 ) -> pd.Series:
     d = np.asarray(distances, dtype=float)
 

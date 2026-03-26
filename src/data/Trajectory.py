@@ -46,7 +46,32 @@ class Trajectory:
     def coordinates(self) -> np.ndarray:
         return np.array([self.data[X], self.data[Y]])
 
-    def data_in_window(self, start: dt.datetime, end: dt.datetime) -> "Trajectory":
+    def data_in_window(
+            self,
+            start: dt.datetime,
+            end: dt.datetime,
+            include_first: bool = False,
+            include_last: bool = False,
+    ) -> "Trajectory":
+        """Returns a Trajectory containing only the observations within the
+        specified time window, with dwell times clipped to the window bounds.
+
+        Args:
+            start: Window start datetime.
+            end: Window end datetime.
+            include_first: If True, always includes the first trajectory point
+                with zero dwell time, regardless of whether it falls within
+                the window. Used for the first window in a loop to ensure
+                correct dwell time calculation at the boundary.
+            include_last: If True, always includes the last trajectory point
+                with zero dwell time, regardless of whether it falls within
+                the window. Used for the last window in a loop to ensure
+                correct dwell time calculation at the boundary.
+
+        Returns:
+            Trajectory containing observations within the window with
+            updated dwell times in seconds.
+        """
         df = self.data.copy()
         datetimes = df[DATETIME]
 
@@ -60,7 +85,14 @@ class Trajectory:
             clipped_duration.dt.total_seconds().fillna(0.0).clip(lower=0.0)
         )
 
-        mask = clipped_duration > 0
+        boundary_indices = set()
+        if include_first:
+            boundary_indices.add(df.index[0])
+        if include_last:
+            boundary_indices.add(df.index[-1])
+
+        mask = (clipped_duration > 0) | df.index.isin(boundary_indices)
+
         df_mask = df[mask]
         window = Trajectory(df=df_mask[REQUIRED_COLUMNS])
         window.data[DWELL_TIME_SECONDS] = clipped_duration[mask]
@@ -141,7 +173,7 @@ class Trajectory:
 
         return pd.DataFrame(rows)
 
-    def get_data_arrays(self) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    def get_data_arrays(self) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         """
         Extract sorted numpy arrays from a Trajectory.
         """

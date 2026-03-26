@@ -54,7 +54,12 @@ def calculate_exposure(
         if end > trajectory.end_time:
             end = trajectory.end_time.to_pydatetime()
 
-        window = trajectory.data_in_window(start, end)
+        window = trajectory.data_in_window(
+            start=start,
+            end=end,
+            include_first=(ii == 0),
+            include_last=(ii == len(windows) - 1),
+        )
         length = end - start
         durations[ii] = length.total_seconds()
         centres.append(start + length / 2)
@@ -65,7 +70,6 @@ def calculate_exposure(
 
         if len(window) == 0:
             print(f"Window {ii + 1:<5d}|   {start} - {end}   |   NO DATA [WARNING]")
-            continue
 
         rho = mobility.distribution(window, environment)
         exposure_sources = environment.sample(centres[ii], method=env_sampling_method)
@@ -124,7 +128,7 @@ def exposure_sums(
         ]
         exposure_sum = df_exposure_only.sum()
         if per_second:
-            exposure_sum / trajectory.duration_in_seconds
+            exposure_sum = exposure_sum / trajectory.duration_in_seconds
         exposure_sum["filename"] = trajectory.csv_file
         results.append(exposure_sum)
 

@@ -33,9 +33,13 @@ class KDE(Mobility):
         buffer = self.bandwidth * standard_deviations
         data = self._get_mobility_data(trajectory, environment, bounds, buffer)
 
+        # zero density when no points in trajectory
+        if isinstance(data, gpd.GeoDataFrame):
+            return data
+
         x, y, t, dt = data.x, data.y, data.t, data.dt
         mask = data.mask
-        if len(x) == 0 or not np.any(mask):
+        if len(x) == 0 or not np.any(mask) or dt.sum() == 0:
             return data.zero_density_gdf
         eval_coords = data.eval_coords
         density = data.zero_density_gdf.density.to_numpy().copy()

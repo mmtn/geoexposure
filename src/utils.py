@@ -28,24 +28,6 @@ DAILY = [
 MONTHLY = [dt.date(year=REFERENCE_TIME.year, month=(m + 1), day=1) for m in range(12)]
 
 
-def metric_name(
-    metric: str, args: abc.Iterable | str | None, join_str: str = "_"
-) -> str:
-    if args is None:
-        arg_string = None
-    elif isinstance(args, str):
-        arg_string = args
-    elif isinstance(args, abc.Iterable):
-        arg_string = join_str.join([f"{arg}" for arg in args if arg is not None])
-    else:
-        arg_string = f"{args}"
-
-    if arg_string is None:
-        return f"{metric}"
-    else:
-        return f"{metric}_{arg_string}"
-
-
 def round_datetime(
     timestamp: dt.datetime, delta: dt.timedelta, to: str = "nearest"
 ) -> dt.datetime:
