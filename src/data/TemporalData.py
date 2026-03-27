@@ -71,14 +71,14 @@ class TemporalData:
     def sample(
         self, timestamp: dt.datetime, method: str = "nearest"
     ) -> SpatialData | float:
+        # TODO: implement "prev" and "next" i.e. floor and ceil
         if self.temporal_type is TemporalType.CYCLIC:
             if self.cycle_duration is None:
                 raise ValueError("cycle_duration must be set for TemporalType.CYCLIC")
             timestamp = get_cyclic_timestamp(timestamp, self.cycle_duration)
-
         if method == "nearest":
             dt_nearest = match_datetime_in_list(
-                timestamp, self._datetime, self.cycle_duration, to=method
+                timestamp, self._datetime, self.cycle_duration, to="nearest"
             )
             return self._get_value_by_key(dt_nearest)
         elif method == "interp":

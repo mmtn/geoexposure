@@ -7,7 +7,7 @@ import geopandas as gpd
 
 class SpatialData:
     def __init__(self, filename: str, crs: Any | None = None, metrics: dict | None = None):
-        assert isinstance(self.metrics, (dict, None)), "metrics must be dict or None"
+        assert isinstance(metrics, (dict, None)), "metrics must be dict or None"
 
         self.gdf: gpd.GeoDataFrame = None
         self.gdf_metrics: gpd.GeoDataFrame = None

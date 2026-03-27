@@ -1,8 +1,12 @@
 import datetime as dt
+from datetime import timedelta
+import logging
+logger = logging.getLogger(__name__)
 
 import numpy as np
 import pandas as pd
 from pandas import DataFrame
+from tqdm import tqdm
 
 from . import Environment, Mobility, utils
 from .data import Trajectory
@@ -155,15 +159,21 @@ class Exposure:
         environment: Environment,
         *,
         temporal_resolution: dt.timedelta | None = None,
-        env_sampling_method: str = "interp",
+        interp_method: str = "interp",
     ):
+        """
+
+        Args:
+            mobility:
+            environment:
+            temporal_resolution:
+            interp_method: "interp", "nearest"
+        """
         self.mobility = mobility
         self.environment = environment
         self.temporal_resolution = temporal_resolution
-        self.env_sampling_method = env_sampling_method
-
-        if not self.environment._calculated:
-            self.environment.calculate()
+        self.interp_method = interp_method
+        self.environment.calculate()
 
     def for_trajectory(
         self,
@@ -311,86 +321,74 @@ class Exposure:
     ) -> pd.DataFrame:
         if start_time is None:
             start_time = trajectory.data["datetime"].min()
-
         if end_time is None:
             end_time = trajectory.data["datetime"].max()
 
-        effective_resolution = temporal_resolution
-        if effective_resolution is None:
-            resolutions = (
-                self.temporal_resolution,
-                self.environment.temporal_resolution,
-            )
-            valid_resolutions = [res for res in resolutions if res is not None]
-            if valid_resolutions:
-                effective_resolution = min(valid_resolutions)
-
-        if effective_resolution is None:
-            raise ValueError(
-                "temporal_resolution must be defined by argument, Exposure, or Environment"
-            )
-
+        effective_resolution = self._resolve_temporal_resolution(temporal_resolution)
         windows = utils.get_time_windows(start_time, end_time, effective_resolution)
-        num_windows = len(windows)
-        scaling = np.zeros(num_windows)
-        durations = np.zeros(num_windows)
+
+        scaling = []
+        durations = []
         centres = []
-        snapshot_sums = []
+        exposure_data = []
 
-        print(f"Computing exposure between {start_time} and {end_time}")
-        print(f"Temporal resolution: {effective_resolution}")
-        print(f"{num_windows} windows")
+        logging.info(f"Computing exposure between {start_time} and {end_time}")
+        logging.info(f"Temporal resolution: {effective_resolution}")
 
-        for ii, (window_start, window_end) in enumerate(windows):
-            start = window_start
-            end = window_end
-
-            if start < trajectory.start_time:
-                start = trajectory.start_time.to_pydatetime()
-            if end > trajectory.end_time:
-                end = trajectory.end_time.to_pydatetime()
+        last_index = len(windows) - 1
+        for ii, (window_start, window_end) in tqdm(
+                enumerate(windows), total=len(windows), desc="Windows"
+        ):
+            # Use trajectory bounds where window extends too far
+            start = max(window_start, trajectory.start_time.to_pydatetime())
+            end = min(window_end, trajectory.end_time.to_pydatetime())
 
             window = trajectory.data_in_window(
                 start=start,
                 end=end,
                 include_first=(ii == 0),
-                include_last=(ii == len(windows) - 1),
+                include_last=(ii == last_index),
             )
             length = end - start
-            durations[ii] = length.total_seconds()
-            centres.append(start + length / 2)
-
-            scaling[ii] = self.environment._scaling_factors(
-                centres[ii], method=self.env_sampling_method
-            )
-
-            if len(window) == 0:
-                print(f"Window {ii + 1:<5d}|   {start} - {end}   |   NO DATA [WARNING]")
-
+            duration = length.total_seconds()
+            centre = start + length / 2
+            scaling_ii = self.environment._get_scaling(centre, self.interp_method)
             rho = self.mobility.distribution(window, self.environment)
-            exposure_sources = self.environment.sample(
-                centres[ii], method=self.env_sampling_method
-            )
+            exposure_sources = self.environment.sample(centre, self.interp_method)
+
             normalised_density = rho.density / rho.density.sum()
-            snapshot_ii = (
-                exposure_sources.drop(columns=["geometry"]).mul(
-                    normalised_density,
-                    axis=0,
-                )
-                * durations[ii]
-            )
-            snapshot_sums.append(snapshot_ii.sum())
+            sources_only = exposure_sources.drop(columns=["geometry"])
+            exposure_ii = sources_only.mul(normalised_density, axis=0) * duration
 
-            print(
-                f"Window {ii + 1:<5d}|   {start} - {end}   |   ({len(window)} points)"
-            )
+            scaling.append(scaling_ii)
+            centres.append(centre)
+            durations.append(duration)
+            exposure_data.append(exposure_ii.sum())
 
-        summary_df = pd.DataFrame(snapshot_sums)
+        window_starts, window_ends = zip(*windows)
+        summary_df = pd.DataFrame(exposure_data)
         summary_df["scaling"] = scaling
-        summary_df["window_start"] = [start for start, _ in windows]
+        summary_df["window_start"] = list(window_starts)
         summary_df["window_centre"] = centres
-        summary_df["window_end"] = [end for _, end in windows]
+        summary_df["window_end"] = list(window_ends)
         summary_df["window_length_seconds"] = durations
-
-        print("Complete")
+        logging.info("Exposure calculation complete")
         return summary_df
+
+    def _resolve_temporal_resolution(
+            self,
+            temporal_resolution: dt.timedelta | None,
+    ) -> dt.timedelta:
+        """Resolve effective temporal resolution from argument, Exposure, or Environment."""
+        candidates = [
+            temporal_resolution,
+            self.temporal_resolution,
+            self.environment.temporal_resolution,
+        ]
+        valid = [r for r in candidates if r is not None]
+        if not valid:
+            raise ValueError(
+                "temporal_resolution must be defined by argument, Exposure, or Environment"
+            )
+        return min(valid)
+

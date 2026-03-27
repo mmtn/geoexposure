@@ -1,13 +1,17 @@
 import datetime as dt
 import warnings
+import logging
+logger = logging.getLogger(__name__)
 
 import geopandas as gpd
 import numpy as np
 import pandas as pd
 
+from .data.TemporalData import TemporalData
 from .Caching import Caching
 from .data.SpatialData import SpatialData
 from .utils import get_gdf_centroids, raster
+
 
 
 class Environment(Caching):
@@ -19,8 +23,8 @@ class Environment(Caching):
     def __init__(
         self,
         spatial_resolution: int | float,
-        spatial_data: dict | None = None,
-        temporal_data: dict | None = None,
+        spatial_data: dict[str, SpatialData] | None = None,
+        temporal_data: dict[str, TemporalData] | None = None,
         spatial_reference_data: SpatialData | None = None,
     ):
         self.spatial_data = spatial_data if spatial_data is not None else {}
@@ -55,17 +59,11 @@ class Environment(Caching):
 
         return f"Spatial:\n{spatial}\n\nTemporal:\n{temporal}"
 
-    def save(self, filename: str) -> None:
-        # TODO: implement Environment.save()
-        # Use a hash over grid, metrics, and other attributes
-        raise NotImplemented()
-
-    def load(self, filename: str) -> None:
-        # TODO: implement Environment.load()
-        raise NotImplemented()
-
     def calculate(self) -> None:
         """Compute all spatial/temporal layers on the raster grid."""
+        if self._calculated:
+            return
+
         for name, data in self.spatial_data.items():
             data.calculate(self.gdf_raster.copy())
 
@@ -138,7 +136,7 @@ class Environment(Caching):
 
         return merged
 
-    def _scaling_factors(
+    def _get_scaling(
         self, timestamp: dt.datetime, method: str = "nearest"
     ) -> float:
         if self.temporal_data is None:
@@ -172,7 +170,7 @@ class Environment(Caching):
         self, datetime: dt.datetime | None = None, method: str = "nearest", **kwargs
     ):
         if not self._calculated:
-            print("run 'calculate()' before 'plot_exposure()'")
+            logging.warning("run 'calculate()' before 'plot_exposure()'")
 
         exposure = self.get_spatial_exposure()
         if datetime is None:
@@ -182,7 +180,7 @@ class Environment(Caching):
             title = str(datetime)
 
         if exposure.empty:
-            warnings.warn("No exposure sources to plot")
+            logging.warning("No exposure sources to plot")
             return None
 
         gdf_plot = self.gdf_raster.copy()

@@ -1,4 +1,6 @@
-# TODO: add logging which is initialised here
+# mypackage/__init__.py
+import logging
+logging.getLogger(__name__).addHandler(logging.NullHandler())
 
 # root level
 from src.Exposure import Exposure, ExposureSeries
