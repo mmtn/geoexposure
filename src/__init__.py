@@ -1,7 +1,7 @@
 # TODO: add logging which is initialised here
 
 # root level
-from src.Exposure import calculate_exposure
+from src.Exposure import Exposure, ExposureSeries
 from src.Environment import Environment
 from src.Mobility import Mobility
 
