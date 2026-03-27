@@ -34,23 +34,20 @@ class KDE(Mobility):
         buffer = self.bandwidth * standard_deviations
         data = self._get_mobility_data(trajectory, environment, bounds, buffer)
 
-        x, y, t, dt = data.x, data.y, data.t, data.dt
-        mask = data.mask
-        if len(x) == 0 or not np.any(mask) or dt.sum() == 0:
+        if len(data.x) == 0 or not np.any(data.mask) or data.dt.sum() == 0:
             return data.zero_density_gdf
-        eval_coords = data.eval_coords
         density = data.zero_density_gdf.density.to_numpy().copy()
 
         #
 
-        coordinates = np.array([x, y])
-        estimator = self._get_estimator(coordinates, weights=dt)
+        coordinates = np.array([data.x, data.y])
+        estimator = self._get_estimator(coordinates, weights=data.dt)
 
         np.seterr(divide="ignore")
-        log_scores = estimator.score_samples(eval_coords)
+        log_scores = estimator.score_samples(data.eval_coords)
         np.seterr(divide="warn")
 
-        density[mask] = np.exp(log_scores)
+        density[data.mask] = np.exp(log_scores)
 
         return gpd.GeoDataFrame(
             data={

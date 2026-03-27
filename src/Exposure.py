@@ -10,6 +10,7 @@ from tqdm import tqdm
 
 from . import Environment, Mobility, utils
 from .data import Trajectory
+from .enums import GapMethod, InterpMethod
 
 
 class ExposureSeries:
@@ -158,21 +159,23 @@ class Exposure:
         mobility: Mobility,
         environment: Environment,
         *,
-        temporal_resolution: dt.timedelta | None = None,
-        interp_method: str = "interp",
+        timestep: dt.timedelta | None = None,
+        interp_method: InterpMethod = InterpMethod.INTERP,
+        gap_method: GapMethod = GapMethod.VORONOI
     ):
         """
 
         Args:
             mobility:
             environment:
-            temporal_resolution:
+            timestep:
             interp_method: "interp", "nearest"
         """
         self.mobility = mobility
         self.environment = environment
-        self.temporal_resolution = temporal_resolution
+        self.timestep = timestep
         self.interp_method = interp_method
+        self.gap_method = gap_method
         self.environment.calculate()
 
     def for_trajectory(
@@ -236,7 +239,7 @@ class Exposure:
             column where a ``source_id`` is present on the ExposureSeries.
 
         Raises:
-            ValueError: If ``temporal_resolution`` is provided alongside a list of
+            ValueError: If ``timestep`` is provided alongside a list of
                 precomputed ExposureSeries objects.
             TypeError: If the input list contains unsupported types.
         """
@@ -255,7 +258,7 @@ class Exposure:
         elif isinstance(first, ExposureSeries):
             if temporal_resolution is not None:
                 raise ValueError(
-                    "`temporal_resolution` is not applicable when passing "
+                    "`timestep` is not applicable when passing "
                     "precomputed ExposureSeries objects."
                 )
             return self._sums_exposure_series_list(
@@ -311,6 +314,29 @@ class Exposure:
 
         return pd.DataFrame(results)
 
+    def _prepare_trajectory(
+            self,
+            trajectory: Trajectory,
+            resolution: dt.timedelta,
+    ) -> Trajectory:
+        """
+        Args:
+            trajectory:
+            resolution:
+
+        Returns:
+            a new Trajectory with dwell times in the data
+        """
+        match self.gap_method:
+            case GapMethod.VORONOI:
+                return trajectory.with_voronoi_dwells()
+            case GapMethod.INTERPOLATE:
+                return trajectory.with_interpolated_gaps(resolution)
+            case GapMethod.RECENT:
+                return trajectory.with_recent_fill(resolution)
+            case GapMethod.IGNORE:
+                return trajectory.with_ignored_gaps(resolution)
+
     def _calculate_exposure_dataframe(
         self,
         trajectory: Trajectory,
@@ -319,12 +345,14 @@ class Exposure:
         end_time: dt.datetime | None = None,
         temporal_resolution: dt.timedelta | None = None,
     ) -> pd.DataFrame:
+
         if start_time is None:
             start_time = trajectory.data["datetime"].min()
         if end_time is None:
             end_time = trajectory.data["datetime"].max()
 
         effective_resolution = self._resolve_temporal_resolution(temporal_resolution)
+        trajectory = self._prepare_trajectory(trajectory, effective_resolution)
         windows = utils.get_time_windows(start_time, end_time, effective_resolution)
 
         scaling = []
@@ -346,8 +374,8 @@ class Exposure:
             window = trajectory.data_in_window(
                 start=start,
                 end=end,
-                include_first=(ii == 0),
-                include_last=(ii == last_index),
+                include_first=(ii == 0) and self.gap_method != GapMethod.IGNORE,
+                include_last=(ii == last_index) and self.gap_method != GapMethod.IGNORE,
             )
             length = end - start
             duration = length.total_seconds()
@@ -382,13 +410,13 @@ class Exposure:
         """Resolve effective temporal resolution from argument, Exposure, or Environment."""
         candidates = [
             temporal_resolution,
-            self.temporal_resolution,
+            self.timestep,
             self.environment.temporal_resolution,
         ]
         valid = [r for r in candidates if r is not None]
         if not valid:
             raise ValueError(
-                "temporal_resolution must be defined by argument, Exposure, or Environment"
+                "timestep must be defined by argument, Exposure, or Environment"
             )
         return min(valid)
 
