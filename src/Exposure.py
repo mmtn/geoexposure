@@ -19,7 +19,9 @@ class ExposureSeries:
 
     def __init__(self, exposure_data: DataFrame, metadata: DataFrame):
         if len(exposure_data) != len(metadata):
-            raise ValueError("exposure_data and metadata must have the same number of rows")
+            raise ValueError(
+                "exposure_data and metadata must have the same number of rows"
+            )
         self.exposure_data = exposure_data.reset_index(drop=True).copy()
         self.metadata = metadata.reset_index(drop=True).copy()
 
@@ -222,7 +224,10 @@ class Exposure:
 
         effective_resolution = temporal_resolution
         if effective_resolution is None:
-            resolutions = (self.temporal_resolution, self.environment.temporal_resolution)
+            resolutions = (
+                self.temporal_resolution,
+                self.environment.temporal_resolution,
+            )
             valid_resolutions = [res for res in resolutions if res is not None]
             if valid_resolutions:
                 effective_resolution = min(valid_resolutions)
@@ -283,7 +288,9 @@ class Exposure:
             )
             snapshot_sums.append(snapshot_ii.sum())
 
-            print(f"Window {ii + 1:<5d}|   {start} - {end}   |   ({len(window)} points)")
+            print(
+                f"Window {ii + 1:<5d}|   {start} - {end}   |   ({len(window)} points)"
+            )
 
         summary_df = pd.DataFrame(snapshot_sums)
         summary_df["scaling"] = scaling

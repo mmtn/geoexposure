@@ -8,6 +8,8 @@ from ..Caching import Caching
 
 
 class Metric(Caching):
+    """Base class for spatial metrics evaluated on a raster grid."""
+
     metric_title = "metric"
     cache_dir = ".cache/metrics"
 
@@ -15,9 +17,11 @@ class Metric(Caching):
         self.data = None
 
     def _hash_params(self) -> tuple:
-        """Returns a tuple of parameters to include in the cache hash,
-        in addition to the input GeoDataFrames. Override in subclasses
-        to include metric-specific parameters.
+        """Return metric-specific parameters for cache hashing.
+
+        Subclasses can override to include parameter values in the cache key
+        (in addition to the input GeoDataFrames).
+
         Returns:
             Tuple of hashable parameters.
         """
@@ -34,9 +38,9 @@ class Metric(Caching):
             return f"{self.metric_title}_{arg_string}"
 
     def calculate(
-            self,
-            gdf_input: GeoDataFrame,
-            gdf_raster: GeoDataFrame,
+        self,
+        gdf_input: GeoDataFrame,
+        gdf_raster: GeoDataFrame,
     ) -> pd.Series:
         self.data = self._get_or_compute(
             fn=self._calculate_metric,

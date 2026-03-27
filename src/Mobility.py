@@ -35,24 +35,29 @@ class Mobility(ABC):
         self,
         trajectory: Trajectory,
         environment: Environment,
-        bounds: tuple = None,
+        bounds: tuple[float, float, float, float] | None = None,
     ):
-        pass
+        """Compute a spatial density distribution for a trajectory."""
+        raise NotImplementedError
 
     @staticmethod
     def _get_mobility_data(
-        trajectory: Trajectory, environment: Environment, bounds: tuple, buffer: float
+        trajectory: Trajectory,
+        environment: Environment,
+        bounds: tuple[float, float, float, float] | None,
+        buffer: float,
     ) -> MobilityData | None:
-        """
+        """Prepare cached arrays and evaluation coordinates for mobility models.
 
         Args:
-            trajectory:
-            gdf_geometry:
-            bounds:
-            buffer:
+            trajectory: Input trajectory.
+            environment: Environment providing the evaluation grid.
+            bounds: Optional (x_min, y_min, x_max, y_max) bounds to limit evaluation.
+                If not provided, computed from the trajectory extent plus buffer.
+            buffer: Padding applied when inferring bounds from the trajectory.
 
         Returns:
-            MobilityData
+            Prepared mobility data, or None if the trajectory has no points.
         """
 
         # Default to zero density everywhere
@@ -69,7 +74,16 @@ class Mobility(ABC):
 
         x, y, t, dt = trajectory.get_data_arrays()
         if len(x) == 0:
-            return zero_density_gdf
+            return MobilityData(
+                x=x,
+                y=y,
+                t=t,
+                dt=dt,
+                eval_coords=np.empty((0, 2), dtype=float),
+                points=environment.geometry_points,
+                mask=np.zeros(len(all_x), dtype=bool),
+                zero_density_gdf=zero_density_gdf,
+            )
 
         # Compute bounds from trajectory extent if not provided
         if bounds is None:

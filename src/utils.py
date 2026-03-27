@@ -31,13 +31,15 @@ MONTHLY = [dt.date(year=REFERENCE_TIME.year, month=(m + 1), day=1) for m in rang
 def round_datetime(
     timestamp: dt.datetime, delta: dt.timedelta, to: str = "nearest"
 ) -> dt.datetime:
-    """
-    Round a datetime to a multiple of a timedelta.
+    """Round a datetime to a multiple of a timedelta.
 
-    :param timestamp: the datetime to round
-    :param delta: increment to round to (e.g. dt.timedelta(minutes=15))
-    :param to: 'nearest', 'floor', or 'ceil'
-    :return: rounded datetime.
+    Args:
+        timestamp: The datetime to round.
+        delta: Increment to round to (e.g. ``dt.timedelta(minutes=15)``).
+        to: Rounding method: ``"nearest"``, ``"floor"``, or ``"ceil"``.
+
+    Returns:
+        The rounded datetime.
     """
     time_seconds = (timestamp - REFERENCE_TIME).total_seconds()
     delta_seconds = delta.total_seconds()
@@ -56,7 +58,7 @@ def round_datetime(
 
 def get_times(
     start_time: dt.datetime, end_time: dt.datetime, delta: dt.timedelta
-) -> list:
+) -> list[dt.datetime]:
     start_new = round_datetime(start_time, delta, to="floor")
     end_new = round_datetime(end_time, delta, to="ceil")
     num_times = int((end_new - start_new) / delta)
@@ -128,13 +130,20 @@ def raster(gdf: gpd.GeoDataFrame, pixel_size_metres: int | float) -> gpd.GeoData
 def get_cyclic_timestamp(
     dt_input: dt.time | dt.date | dt.datetime, cycle_duration: dt.timedelta
 ) -> dt.datetime:
-    """
-    dt.time objects assume daily cycle
-    dt.date objects assume yearly cycle
-    dt.datetime objects: assume yearly cycle
+    """Map a date/time into a repeating cycle anchored at `REFERENCE_TIME`.
 
-    :param dt_input:
-    :return:
+    Notes:
+        - `dt.time` assumes a daily cycle.
+        - `dt.date` assumes a yearly cycle.
+        - `dt.datetime` assumes a yearly cycle (month/day/time retained).
+
+    Args:
+        dt_input: Input timestamp.
+        cycle_duration: Cycle length. Must be positive.
+
+    Returns:
+        A datetime in the half-open range
+        [`REFERENCE_TIME`, `REFERENCE_TIME` + cycle_duration).
     """
     if cycle_duration.total_seconds() <= 0:
         raise ValueError("cycle duration must be greater than 0")
@@ -233,7 +242,7 @@ def match_datetime_in_list(
                 match = after
 
     else:
-        ValueError(f"unknown rounding method: {to}")
+        raise ValueError(f"unknown rounding method: {to}")
 
     if cycle is not None and match == last:
         match = first
@@ -241,16 +250,18 @@ def match_datetime_in_list(
     return match
 
 
-def read_csv_directory(data_directory: str, max_files: int | float = np.inf):
-    """
-    Reads data from CSV files in given directory to Trajectory objects
+def read_csv_directory(
+    data_directory: str, max_files: int | float = np.inf
+) -> list[Trajectory]:
+    """Read CSV files in a directory into `Trajectory` objects.
 
     Args:
-        data_directory: contains CSV files with datetime, x, y
-        max_files:
+        data_directory: Directory containing CSV files with at least
+            ``datetime``, ``x``, and ``y`` columns.
+        max_files: Maximum number of files to read.
 
     Returns:
-        list of Trajectory objects
+        Trajectories created from each CSV.
     """
     csv_files = [
         os.path.join(data_directory, file)
@@ -265,7 +276,7 @@ def read_csv_directory(data_directory: str, max_files: int | float = np.inf):
 
 
 def get_gdf_centroids(
-    gdf: gpd.GeoDataFrame, bounds: tuple | None = None
+    gdf: gpd.GeoDataFrame, bounds: tuple[float, float, float, float] | None = None
 ) -> tuple[list[Point], np.ndarray]:
     if bounds is not None:
         gdf = gdf.clip(bounds)

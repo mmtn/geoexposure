@@ -17,7 +17,9 @@ REQUIRED_COLUMNS = [
 
 
 class Trajectory:
-    def __init__(self, df: pd.DataFrame, csv_file: str = None):
+    """Time-ordered point observations with derived dwell times."""
+
+    def __init__(self, df: pd.DataFrame, csv_file: str | None = None):
         assert sorted(df.columns) == sorted(
             REQUIRED_COLUMNS
         ), "DataFrame must have columns 'datetime', 'x', 'y'"
@@ -26,7 +28,7 @@ class Trajectory:
         self.csv_file = csv_file
         self._add_dwell_times()
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self.data)
 
     @property
@@ -38,7 +40,7 @@ class Trajectory:
         return self.data[DATETIME].max()
 
     @property
-    def duration_in_seconds(self):
+    def duration_in_seconds(self) -> float:
         time_difference = self.data[DATETIME].max() - self.data[DATETIME].min()
         return time_difference.total_seconds()
 
@@ -61,11 +63,11 @@ class Trajectory:
         return x.max() - x.min(), y.max() - y.min()
 
     def data_in_window(
-            self,
-            start: dt.datetime,
-            end: dt.datetime,
-            include_first: bool = False,
-            include_last: bool = False,
+        self,
+        start: dt.datetime,
+        end: dt.datetime,
+        include_first: bool = False,
+        include_last: bool = False,
     ) -> "Trajectory":
         """Returns a Trajectory containing only the observations within the
         specified time window, with dwell times clipped to the window bounds.
@@ -112,20 +114,22 @@ class Trajectory:
         window.data[DWELL_TIME_SECONDS] = clipped_duration[mask]
         return window
 
-    def _add_dwell_times(self):
+    def _add_dwell_times(self) -> None:
         datetimes = self.data[DATETIME]
         dwell_times = (datetimes.shift(-1) - datetimes.shift(1)) / 2
         dwell_times_seconds = dwell_times.dt.total_seconds()
         dwell_times_seconds = dwell_times_seconds.fillna(0)
         self.data[DWELL_TIME_SECONDS] = dwell_times_seconds
 
-    def resample(self, times: list, method: str):
-        """
-        Resample the trajectory at the given times.
+    def resample(self, times: list[dt.datetime], method: str) -> "Trajectory":
+        """Resample the trajectory at the given times.
 
-        :param times: a list of datetimes
-        :param method: "nearest" or "interp"
-        :return: new Trajectory object with resampled data
+        Args:
+            times: Datetimes to sample at.
+            method: Either ``"nearest"`` or ``"interp"``.
+
+        Returns:
+            A new trajectory containing the resampled observations.
         """
         times = pd.Series(times)
 
@@ -154,20 +158,15 @@ class Trajectory:
 
         return Trajectory(resampled)
 
-    def _resample_nearest(self, times: pd.Series):
-        """
-        For each requested time, return the row with the closest timestamp.
-        """
+    def _resample_nearest(self, times: pd.Series) -> pd.DataFrame:
+        """Select the closest recorded point for each requested time."""
         indices = [(self.data[DATETIME] - t).abs().argmin() for t in times]
         resampled = self.data.iloc[indices][REQUIRED_COLUMNS].copy()
         resampled[DATETIME] = times.values
         return resampled.reset_index(drop=True)
 
-    def _resample_interp(self, times: pd.Series):
-        """
-        For each requested time, linearly interpolate latitude and longitude
-        between the two adjacent timestamps.
-        """
+    def _resample_interp(self, times: pd.Series) -> pd.DataFrame:
+        """Linearly interpolate x/y between adjacent timestamps."""
         rows = []
         for t in times:
             before = self.data[self.data[DATETIME] <= t].iloc[-1]
@@ -178,7 +177,7 @@ class Trajectory:
                 y = before[Y]
             else:
                 weight = (t - before[DATETIME]).total_seconds() / (
-                        after[DATETIME] - before[DATETIME]
+                    after[DATETIME] - before[DATETIME]
                 ).total_seconds()
                 x = before[X] + weight * (after[X] - before[X])
                 y = before[Y] + weight * (after[Y] - before[Y])
@@ -188,9 +187,7 @@ class Trajectory:
         return pd.DataFrame(rows)
 
     def get_data_arrays(self) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-        """
-        Extract sorted numpy arrays from a Trajectory.
-        """
+        """Extract sorted numpy arrays from a trajectory."""
         x_values = self.data[X].to_numpy(dtype=float)
         y_values = self.data[Y].to_numpy(dtype=float)
         t_values = self.data[DATETIME].to_numpy(

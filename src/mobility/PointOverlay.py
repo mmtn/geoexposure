@@ -4,9 +4,11 @@ import numpy as np
 from .. import Environment, Mobility
 from ..data import Trajectory
 
-class PointOverlay(Mobility):
 
-    def __init__(self, buffer):
+class PointOverlay(Mobility):
+    """Mobility model counting points falling within each grid polygon."""
+
+    def __init__(self, buffer: float):
         super().__init__()
         self.buffer = buffer
 
@@ -14,20 +16,18 @@ class PointOverlay(Mobility):
         self,
         trajectory: Trajectory,
         environment: Environment,
-        bounds=None,
+        bounds: tuple[float, float, float, float] | None = None,
     ) -> gpd.GeoDataFrame:
         """Computes density by counting trajectory points within each polygon.
 
         Args:
             trajectory: Source of observed positions and times.
-            gdf_geometry: GeoDataFrame whose geometry defines the evaluation
-                locations.
             bounds: Optional spatial bounds to restrict evaluation.
 
         Returns:
             GeoDataFrame with columns 'density' and 'point_geometry', and the
-            CRS and geometry of gdf_geometry. Density values represent the
-            count of trajectory points falling within each polygon.
+            CRS and geometry of the environment raster. Density values represent
+            the count of trajectory points falling within each polygon.
         """
         buffer = self.buffer
         data = self._get_mobility_data(trajectory, environment, bounds, buffer)

@@ -9,10 +9,7 @@ from ..data import Trajectory
 
 
 class DensityModel(Mobility):
-    """
-    Computes a time-integrated 2D Gaussian density field from a sequence of
-    observed (x, y, t) positions, returned as a GeoDataFrame
-    """
+    """Time-integrated 2D Gaussian density field from observed positions."""
 
     def __init__(
         self,
@@ -83,10 +80,10 @@ class DensityModel(Mobility):
         t: dt.datetime,
         time_values: np.ndarray,
     ) -> float:
-        """
-        Effective time to nearest observation in seconds:
-        minimum of time since previous observation and time until next.
-        Zero outside the observed time range.
+        """Compute effective time to the nearest observation in seconds.
+
+        This is the minimum of time since the previous observation and time until
+        the next observation. It is defined as 0 outside the observed time range.
         """
         if t <= time_values[0] or t >= time_values[-1]:
             return 0.0
@@ -98,28 +95,24 @@ class DensityModel(Mobility):
 
     def _instantaneous_density(
         self,
-        t: float,
+        t: dt.datetime,
         x_values: np.ndarray,
         y_values: np.ndarray,
         time_values: np.ndarray,
         eval_x: np.ndarray,
         eval_y: np.ndarray,
     ) -> np.ndarray:
-        """
-        Instantaneous 2D density evaluated at the provided coordinates
+        """Evaluate instantaneous 2D density at the provided coordinates.
 
-        Parameters
-        ----------
-        t : float
-            Time at which to evaluate the density.
-        x_values, y_values, time_values : np.ndarray
-            Arrays of observed data.
-        eval_x, eval_y : np.ndarray
-            1D arrays of evaluation point coordinates.
+        Args:
+            t: Time at which to evaluate the density.
+            x_values: Observed x coordinates.
+            y_values: Observed y coordinates.
+            time_values: Observation times aligned with x/y arrays.
+            eval_x: 1D x coordinates of evaluation points.
+            eval_y: 1D y coordinates of evaluation points.
 
-        Returns
-        -------
-        np.ndarray
+        Returns:
             1D array of density values, one per evaluation point.
         """
         mu_x, mu_y = self._mean_position(t, x_values, y_values, time_values)
@@ -137,23 +130,18 @@ class DensityModel(Mobility):
         self,
         trajectory: Trajectory,
         environment: Environment,
-        bounds=None,
+        bounds: tuple[float, float, float, float] | None = None,
     ) -> gpd.GeoDataFrame:
-        """
-        Time-integrated density over the trajectory's time range.
+        """Compute time-integrated density over the trajectory time range.
 
-        Parameters
-        ----------
-        trajectory : Trajectory
-            Observed positions and times.
-        bounds : optional
-            Passed to utils.get_gdf_centroids to spatially restrict evaluation.
+        Args:
+            trajectory: Observed positions and times.
+            environment: Evaluation grid and CRS.
+            bounds: Optional spatial bounds to restrict evaluation.
 
-        Returns
-        -------
-        gpd.GeoDataFrame
-            Contains 'density' column from evaluation, 'point_geometry', and the CRS
-            and geometry of gdf_geometry.
+        Returns:
+            GeoDataFrame containing a ``density`` column aligned to the
+            environment raster geometry.
         """
         standard_deviations = 3
         buffer = self.sigma0 * standard_deviations

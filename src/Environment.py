@@ -5,12 +5,14 @@ import geopandas as gpd
 import numpy as np
 import pandas as pd
 
-from src.Caching import Caching
+from .Caching import Caching
 from .data.SpatialData import SpatialData
 from .utils import get_gdf_centroids, raster
 
 
 class Environment(Caching):
+    """Spatial/temporal exposure sources sampled on a fixed raster."""
+
     EXPOSURE_COLUMN = "exposure"
     cache_dir = ".cache/environment"
 
@@ -21,7 +23,7 @@ class Environment(Caching):
         temporal_data: dict | None = None,
         spatial_reference_data: SpatialData | None = None,
     ):
-        self.spatial_data = spatial_data if spatial_data is not None else None
+        self.spatial_data = spatial_data if spatial_data is not None else {}
         self.temporal_data = temporal_data if temporal_data is not None else None
         self.spatial_resolution = spatial_resolution
         self.spatial_reference_data = spatial_reference_data
@@ -32,7 +34,7 @@ class Environment(Caching):
         self._calculated = False
         self._set_temporal_resolution()
 
-    def __str__(self):
+    def __str__(self) -> str:
         spatial = ""
         for name, data in self.spatial_data.items():
             spatial += f"{name}\n"
@@ -53,16 +55,17 @@ class Environment(Caching):
 
         return f"Spatial:\n{spatial}\n\nTemporal:\n{temporal}"
 
-    def save(self, filename: str):
+    def save(self, filename: str) -> None:
         # TODO: implement Environment.save()
         # Use a hash over grid, metrics, and other attributes
         raise NotImplemented()
 
-    def load(self, filename: str):
+    def load(self, filename: str) -> None:
         # TODO: implement Environment.load()
         raise NotImplemented()
 
-    def calculate(self):
+    def calculate(self) -> None:
+        """Compute all spatial/temporal layers on the raster grid."""
         for name, data in self.spatial_data.items():
             data.calculate(self.gdf_raster.copy())
 
@@ -78,9 +81,10 @@ class Environment(Caching):
 
         self._calculated = True
 
-    def columns(self):
+    def columns(self) -> list[str]:
+        """Return column names produced by `sample()` (excluding geometry)."""
         temporal_data = self.temporal_data if self.temporal_data is not None else {}
-        columns = list()
+        columns: list[str] = []
 
         for key, spatial in self.spatial_data.items():
             for metric, weight in spatial.metrics.items():

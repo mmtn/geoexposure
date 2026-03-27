@@ -5,6 +5,7 @@ from sklearn.neighbors import KernelDensity
 from .. import Environment, Mobility
 from ..data import Trajectory
 
+
 class KDE(Mobility):
     def __init__(self, kernel: str, bandwidth: float):
         super().__init__()
@@ -32,10 +33,6 @@ class KDE(Mobility):
         standard_deviations = 3
         buffer = self.bandwidth * standard_deviations
         data = self._get_mobility_data(trajectory, environment, bounds, buffer)
-
-        # zero density when no points in trajectory
-        if isinstance(data, gpd.GeoDataFrame):
-            return data
 
         x, y, t, dt = data.x, data.y, data.t, data.dt
         mask = data.mask

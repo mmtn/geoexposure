@@ -13,10 +13,10 @@ class Proximity(Metric):
     metric_title = "proximity"
 
     def __init__(
-            self,
-            column: str | None = None,
-            value: int | float | None = None,
-            ):
+        self,
+        column: str | None = None,
+        value: int | float | None = None,
+    ):
         super().__init__()
         self.column = column
         self.value = value
@@ -26,11 +26,11 @@ class Proximity(Metric):
         return self.column, self.value
 
     def _calculate_metric(
-            self, gdf_input: gpd.GeoDataFrame, gdf_raster: gpd.GeoDataFrame
+        self, gdf_input: gpd.GeoDataFrame, gdf_raster: gpd.GeoDataFrame
     ):
         if self.column is not None and self.value is not None:
             assert (
-                    self.value in gdf_input[self.column].values
+                self.value in gdf_input[self.column].values
             ), f"value '{self.value}' not found in '{self.column}' column"
             gdf_to = gdf_input[gdf_input[self.column] == self.value]
         else:
@@ -47,10 +47,10 @@ class ProximityRisk(Metric):
     metric_title = "proximity_risk"
 
     def __init__(
-            self,
-            column: str | None = None,
-            value: Any | None = None,
-            threshold: float | None = None,
+        self,
+        column: str | None = None,
+        value: Any | None = None,
+        threshold: float | None = None,
     ):
         super().__init__()
         self.column = column
@@ -62,7 +62,7 @@ class ProximityRisk(Metric):
         return self.column, self.value, self.threshold
 
     def _calculate_metric(
-            self, gdf_input: gpd.GeoDataFrame, gdf_raster: gpd.GeoDataFrame
+        self, gdf_input: gpd.GeoDataFrame, gdf_raster: gpd.GeoDataFrame
     ):
         proximity_metric = Proximity(self.column, self.value)
         proximity = proximity_metric._calculate_metric(gdf_input, gdf_raster)
@@ -73,8 +73,9 @@ class ProximityRisk(Metric):
 
 # Helper functions
 def calculate_gdf_proximity(
-        gdf_from: gpd.GeoDataFrame, gdf_to: gpd.GeoDataFrame
-) -> list:
+    gdf_from: gpd.GeoDataFrame, gdf_to: gpd.GeoDataFrame
+) -> list[float]:
+    """Compute nearest distance from each geometry in ``gdf_from`` to ``gdf_to``."""
     if not all(isinstance(x, gpd.GeoDataFrame) for x in (gdf_from, gdf_to)):
         raise ValueError("Inputs must be GeoDataFrames with 'geometry' column")
 
@@ -93,8 +94,9 @@ def calculate_gdf_proximity(
 
 
 def proximity_to_risk(
-        distances: pd.Series, threshold: float, shape: float = 4.0
+    distances: pd.Series, threshold: float, shape: float = 4.0
 ) -> pd.Series:
+    """Map distances to a [0, 1] risk score with exponential decay."""
     d = np.asarray(distances, dtype=float)
 
     if threshold == 0 or threshold is None:

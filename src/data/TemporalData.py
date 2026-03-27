@@ -7,14 +7,16 @@ from ..utils import check_iter_types, get_cyclic_timestamp, match_datetime_in_li
 
 
 class TemporalData:
+    """Time-indexed values sampled with nearest or interpolation."""
+
     VALID_TYPES = (float, SpatialData)
 
     def __init__(
-            self,
-            time_data_dict: dict,
-            cycle_duration: dt.timedelta | None = None,
-            temporal_resolution: dt.timedelta | None = None,
-            temporal_type: TemporalType = None,
+        self,
+        time_data_dict: dict,
+        cycle_duration: dt.timedelta | None = None,
+        temporal_resolution: dt.timedelta | None = None,
+        temporal_type: TemporalType | None = None,
     ):
         # Set from arguments
         self.cycle_duration = cycle_duration
@@ -24,8 +26,8 @@ class TemporalData:
         self._create_dict(time_data_dict)
 
         # Initialise variables
-        self.timestamp_type = None
-        self.data_type = None
+        self.timestamp_type: type | None = None
+        self.data_type: type | None = None
 
         self._set_timestamp_type()
         self._set_data_type()
@@ -40,7 +42,7 @@ class TemporalData:
     def max_time(self) -> np.ndarray:
         return np.array(list(self._dict.keys())).max()
 
-    def _arg_check(self):
+    def _arg_check(self) -> None:
         if len(self.data) <= 1:
             raise ValueError("multiple time points must be provided for TemporalData")
 
@@ -59,17 +61,19 @@ class TemporalData:
                 )
 
         if (
-                self.temporal_type is TemporalType.DATED
-                and self.timestamp_type is dt.datetime
+            self.temporal_type is TemporalType.DATED
+            and self.timestamp_type is not dt.datetime
         ):
             raise ValueError(
                 "'time_data_dict' keys must be dt.datetime for TemporalType.DATED"
             )
 
     def sample(
-            self, timestamp: dt.datetime, method: str = "nearest"
+        self, timestamp: dt.datetime, method: str = "nearest"
     ) -> SpatialData | float:
         if self.temporal_type is TemporalType.CYCLIC:
+            if self.cycle_duration is None:
+                raise ValueError("cycle_duration must be set for TemporalType.CYCLIC")
             timestamp = get_cyclic_timestamp(timestamp, self.cycle_duration)
 
         if method == "nearest":
@@ -85,17 +89,17 @@ class TemporalData:
     def _get_value_by_key(self, timestamp: dt.datetime) -> SpatialData | float:
         try:
             return self._dict[timestamp]
-        except:
-            raise ValueError(f"no data at timestamp {timestamp}")
+        except KeyError as e:
+            raise ValueError(f"no data at timestamp {timestamp}") from e
 
-    def _set_timestamp_type(self):
+    def _set_timestamp_type(self) -> None:
         first_timestamp = self.timestamps[0]
         first_type = type(first_timestamp)
         if not check_iter_types(self.timestamps, first_type):
             raise ValueError("all keys of 'time_data_dict' must have same type")
         self.timestamp_type = first_type
 
-    def _set_data_type(self):
+    def _set_data_type(self) -> None:
         first_value = self.data[0]
         if not isinstance(first_value, self.VALID_TYPES):
             raise TypeError(
@@ -105,18 +109,24 @@ class TemporalData:
             raise ValueError("all values of 'time_data_dict' must have same type")
         self.data_type = type(first_value)
 
-    def _set_temporal_resolution(self):
+    def _set_temporal_resolution(self) -> None:
         if self.temporal_resolution is not None:
             return
         temporal_resolution = np.min(np.diff(self._datetime))
-        time_after_cycle = self._datetime[0] + self.cycle_duration
-        difference_to_end = time_after_cycle - self._datetime[-1]
-        if difference_to_end < temporal_resolution:
-            temporal_resolution = difference_to_end
+        if (
+            self.temporal_type is TemporalType.CYCLIC
+            and self.cycle_duration is not None
+        ):
+            time_after_cycle = self._datetime[0] + self.cycle_duration
+            difference_to_end = time_after_cycle - self._datetime[-1]
+            if difference_to_end < temporal_resolution:
+                temporal_resolution = difference_to_end
         self.temporal_resolution = temporal_resolution
 
-    def _timestamps_to_datetime(self):
+    def _timestamps_to_datetime(self) -> None:
         if self.temporal_type == TemporalType.CYCLIC:
+            if self.cycle_duration is None:
+                raise ValueError("cycle_duration must be set for TemporalType.CYCLIC")
             self._datetime = [
                 get_cyclic_timestamp(ts, self.cycle_duration) for ts in self.timestamps
             ]
@@ -125,7 +135,7 @@ class TemporalData:
         else:
             raise ValueError(f"unknown TemporalType: {self.temporal_type}")
 
-    def _create_dict(self, time_data_dict: dict):
+    def _create_dict(self, time_data_dict: dict) -> None:
         timestamps_in = list(time_data_dict.keys())
         data_in = list(time_data_dict.values())
         sorting = np.argsort(timestamps_in)
@@ -135,7 +145,7 @@ class TemporalData:
         self._timestamps_to_datetime()
         self._dict = {key: value for key, value in zip(self._datetime, self.data)}
 
-    def _get_value_interpolated(self, datetime: dt.datetime):
+    def _get_value_interpolated(self, datetime: dt.datetime) -> SpatialData | float:
         dt_previous = match_datetime_in_list(
             datetime, self._datetime, self.cycle_duration, to="floor"
         )
