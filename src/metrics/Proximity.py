@@ -22,7 +22,12 @@ class Proximity(Metric):
         self.value = value
         self.name = self.get_name(self.column, self.value)
 
-    def _calculate_metric(self, gdf_input, gdf_raster):
+    def _hash_params(self) -> tuple:
+        return self.column, self.value
+
+    def _calculate_metric(
+            self, gdf_input: gpd.GeoDataFrame, gdf_raster: gpd.GeoDataFrame
+    ):
         if self.column is not None and self.value is not None:
             assert (
                     self.value in gdf_input[self.column].values
@@ -35,7 +40,7 @@ class Proximity(Metric):
         proximity = calculate_gdf_proximity(gdf_from, gdf_to)
 
         self.data = pd.Series(proximity)
-        self._calculated = True
+        return self.data
 
 
 class ProximityRisk(Metric):
@@ -53,24 +58,17 @@ class ProximityRisk(Metric):
         self.threshold = threshold
         self.name = self.get_name(self.column, self.value, self.threshold)
 
+    def _hash_params(self) -> tuple:
+        return self.column, self.value, self.threshold
+
     def _calculate_metric(
             self, gdf_input: gpd.GeoDataFrame, gdf_raster: gpd.GeoDataFrame
     ):
-        # TODO: remove duplication of code
-        if self.column is not None and self.value is not None:
-            assert (
-                    self.value in gdf_input[self.column].values
-            ), f"value '{self.value}' not found in '{self.column}' column"
-            gdf_to = gdf_input[gdf_input[self.column] == self.value]
-        else:
-            gdf_to = gdf_input
-
-        gdf_from = gdf_raster
-        proximity = calculate_gdf_proximity(gdf_from, gdf_to)
+        proximity_metric = Proximity(self.column, self.value)
+        proximity = proximity_metric._calculate_metric(gdf_input, gdf_raster)
         risk = proximity_to_risk(proximity, self.threshold)
-
         self.data = pd.Series(risk)
-        self._calculated = True
+        return self.data
 
 
 # Helper functions

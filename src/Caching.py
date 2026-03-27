@@ -118,6 +118,7 @@ class Caching:
         self,
         fn: Callable,
         args: tuple,
+        hash_args: tuple = (),
         label: str = "cache",
     ) -> Any:
         """Returns a cached result if available, otherwise computes and caches it.
@@ -130,7 +131,7 @@ class Caching:
         Returns:
             The cached or freshly computed result.
         """
-        key = self._make_hash(*args)
+        key = self._make_hash(*args, *hash_args)
         result = self._load_from_cache(key, label)
 
         if result is not None:

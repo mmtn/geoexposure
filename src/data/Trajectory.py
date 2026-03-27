@@ -46,6 +46,20 @@ class Trajectory:
     def coordinates(self) -> np.ndarray:
         return np.array([self.data[X], self.data[Y]])
 
+    @property
+    def bounds(self) -> tuple:
+        if len(self) == 0:
+            return None, None, None, None
+        x, y, _, _ = self.get_data_arrays()
+        return x.min(), x.max(), y.min(), y.max()
+
+    @property
+    def extent(self) -> tuple:
+        if len(self) == 0:
+            return 0.0, 0.0
+        x, y, _, _ = self.get_data_arrays()
+        return x.max() - x.min(), y.max() - y.min()
+
     def data_in_window(
             self,
             start: dt.datetime,

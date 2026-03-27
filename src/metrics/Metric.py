@@ -4,13 +4,24 @@ from typing import Any
 import pandas as pd
 from geopandas import GeoDataFrame
 
+from ..Caching import Caching
 
-class Metric:
+
+class Metric(Caching):
     metric_title = "metric"
+    cache_dir = ".cache/metrics"
 
     def __init__(self):
-        self._calculated = False
         self.data = None
+
+    def _hash_params(self) -> tuple:
+        """Returns a tuple of parameters to include in the cache hash,
+        in addition to the input GeoDataFrames. Override in subclasses
+        to include metric-specific parameters.
+        Returns:
+            Tuple of hashable parameters.
+        """
+        return ()
 
     def get_name(self, *args: Any) -> str:
         joining_str = "_"
@@ -22,9 +33,17 @@ class Metric:
         else:
             return f"{self.metric_title}_{arg_string}"
 
-    def calculate(self, gdf_input: GeoDataFrame, gdf_raster: GeoDataFrame) -> pd.Series:
-        if not self._calculated:
-            self._calculate_metric(gdf_input, gdf_raster)
+    def calculate(
+            self,
+            gdf_input: GeoDataFrame,
+            gdf_raster: GeoDataFrame,
+    ) -> pd.Series:
+        self.data = self._get_or_compute(
+            fn=self._calculate_metric,
+            args=(gdf_input, gdf_raster),
+            hash_args=self._hash_params(),
+            label=self.metric_title,
+        )
         return self.data
 
     def _calculate_metric(self, gdf_input: GeoDataFrame, gdf_raster: GeoDataFrame):

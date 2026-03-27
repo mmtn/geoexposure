@@ -14,6 +14,9 @@ class Fragmentation(Metric):
         self.value = value
         self.name = self.get_name(self.column, self.value)
 
+    def _hash_params(self) -> tuple:
+        return self.column, self.value
+
     def _calculate_metric(
         self, gdf_input: gpd.GeoDataFrame, gdf_raster: gpd.GeoDataFrame
     ):
