@@ -17,21 +17,31 @@ class ExposureSeries:
         "window_length_seconds",
     )
 
-    def __init__(self, exposure_data: DataFrame, metadata: DataFrame):
+    def __init__(
+        self,
+        exposure_data: DataFrame,
+        metadata: DataFrame,
+        source_id: str | None = None
+    ):
         if len(exposure_data) != len(metadata):
             raise ValueError(
                 "exposure_data and metadata must have the same number of rows"
             )
         self.exposure_data = exposure_data.reset_index(drop=True).copy()
         self.metadata = metadata.reset_index(drop=True).copy()
+        self.source_id = source_id
 
     @classmethod
-    def from_dataframe(cls, df: DataFrame) -> "ExposureSeries":
+    def from_dataframe(
+        cls,
+        df: DataFrame,
+        source_id: str | None = None
+    ) -> "ExposureSeries":
         meta_cols = [col for col in cls.META_COLUMNS if col in df.columns]
         metadata = df[meta_cols].copy()
         exposure_cols = [col for col in df.columns if col not in meta_cols]
         exposure_data = df[exposure_cols].copy()
-        return cls(exposure_data=exposure_data, metadata=metadata)
+        return cls(exposure_data=exposure_data, metadata=metadata, source_id=source_id)
 
     @property
     def dataframe(self) -> DataFrame:
@@ -152,6 +162,9 @@ class Exposure:
         self.temporal_resolution = temporal_resolution
         self.env_sampling_method = env_sampling_method
 
+        if not self.environment._calculated:
+            self.environment.calculate()
+
     def for_trajectory(
         self,
         trajectory: Trajectory,
@@ -166,7 +179,7 @@ class Exposure:
             end_time=end_time,
             temporal_resolution=temporal_resolution,
         )
-        return ExposureSeries.from_dataframe(summary_df)
+        return ExposureSeries.from_dataframe(summary_df, source_id=trajectory.source_id)
 
     def for_trajectories(
         self,
@@ -184,26 +197,106 @@ class Exposure:
 
     def sums(
         self,
-        trajectories: list[Trajectory],
+        inputs: list[Trajectory] | list[ExposureSeries],
         *,
         temporal_resolution: dt.timedelta | None = None,
         per_second: bool = True,
         apply_scaling: bool = False,
     ) -> pd.DataFrame:
+        """Compute exposure sums from either trajectories or precomputed exposure series.
+
+        Dispatches to the appropriate internal method based on the type of the
+        first element in the input list.
+
+        Args:
+            inputs: Either a list of Trajectory objects or a list of precomputed
+                ExposureSeries objects. The type of the first element determines
+                which internal method is used.
+            temporal_resolution: The temporal resolution to use when computing
+                exposure series from trajectories. Not applicable when passing
+                precomputed ExposureSeries objects.
+            per_second: Whether to normalise exposure values per second before
+                computing sums. Defaults to True.
+            apply_scaling: Whether to apply scaling to the exposure series before
+                computing sums. Defaults to False.
+
+        Returns:
+            A DataFrame containing the exposure sums for each input, with one row
+            per trajectory or exposure series. Rows will include a ``filename``
+            column where a ``source_id`` is present on the ExposureSeries.
+
+        Raises:
+            ValueError: If ``temporal_resolution`` is provided alongside a list of
+                precomputed ExposureSeries objects.
+            TypeError: If the input list contains unsupported types.
+        """
+        if not inputs:
+            return pd.DataFrame()
+
+        first = inputs[0]
+
+        if isinstance(first, Trajectory):
+            return self._sums_trajectory_list(
+                inputs,
+                temporal_resolution=temporal_resolution,
+                per_second=per_second,
+                apply_scaling=apply_scaling,
+            )
+        elif isinstance(first, ExposureSeries):
+            if temporal_resolution is not None:
+                raise ValueError(
+                    "`temporal_resolution` is not applicable when passing "
+                    "precomputed ExposureSeries objects."
+                )
+            return self._sums_exposure_series_list(
+                inputs,
+                per_second=per_second,
+                apply_scaling=apply_scaling,
+            )
+        else:
+            raise TypeError(
+                f"Unsupported input type '{type(first).__name__}'. "
+                "Expected a list of Trajectory or ExposureSeries objects."
+            )
+
+    def _sums_trajectory_list(
+            self,
+            trajectories: list[Trajectory],
+            *,
+            temporal_resolution: dt.timedelta | None = None,
+            per_second: bool = True,
+            apply_scaling: bool = False,
+    ) -> pd.DataFrame:
+        exposure_series_list = self.for_trajectories(
+            trajectories,
+            temporal_resolution=temporal_resolution
+        )
+        return self._sums_exposure_series_list(
+            exposure_series_list,
+            per_second=per_second,
+            apply_scaling=apply_scaling,
+        )
+
+    def _sums_exposure_series_list(
+            self,
+            exposure_series_list: list[ExposureSeries],
+            *,
+            per_second: bool = True,
+            apply_scaling: bool = False,
+    ) -> pd.DataFrame:
         results = []
 
-        for trajectory in trajectories:
-            series = self.for_trajectory(
-                trajectory=trajectory,
-                temporal_resolution=temporal_resolution,
-            )
+        for series in exposure_series_list:
             if per_second:
                 series = series.per_second()
             if apply_scaling:
                 series = series.scaled()
 
             exposure_sum = series.mean()
-            exposure_sum["filename"] = trajectory.csv_file
+
+            if series.source_id is not None:
+                exposure_sum["filename"] = series.source_id
+
             results.append(exposure_sum)
 
         return pd.DataFrame(results)

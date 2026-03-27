@@ -192,5 +192,5 @@ class Environment(Caching):
         return ax
 
     def plot_reference(self, **kwargs):
-        ax = self.spatial_reference_data.plot(**kwargs)
+        ax = self.spatial_reference_data.gdf.plot(**kwargs)
         return ax

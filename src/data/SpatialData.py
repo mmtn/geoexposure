@@ -6,20 +6,19 @@ import geopandas as gpd
 
 
 class SpatialData:
-    def __init__(self, file: str, crs: Any | None = None, metrics: dict | None = None):
-        self.gdf = None
-        self.gdf_metrics = None
-        self._calculated = False
+    def __init__(self, filename: str, crs: Any | None = None, metrics: dict | None = None):
+        assert isinstance(self.metrics, (dict, None)), "metrics must be dict or None"
 
-        self._set_data(file, crs)
+        self.gdf: gpd.GeoDataFrame = None
+        self.gdf_metrics: gpd.GeoDataFrame = None
+        self._calculated: bool = False
+
+        self._set_data(filename, crs)
         self.metrics = metrics if metrics is not None else dict()
+        self._metrics_list: list = list(self.metrics.keys())
+        self._metric_weights: list = list(self.metrics.values())
 
-        assert type(self.metrics) is dict, "metrics must be a 'Metric: weight' dict"
-
-        self._metrics_list = list(self.metrics.keys())
-        self._metric_weights = list(self.metrics.values())
-
-    def __str__(self):
+    def __str__(self) -> str:
         df = pd.DataFrame(
             data={
                 "metric": [metric.name for metric in self._metrics_list],
@@ -32,7 +31,7 @@ class SpatialData:
         else:
             return df.to_string(index=False)
 
-    def copy(self):
+    def copy(self) -> "SpatialData":
         new = self.__class__.__new__(self.__class__)
         new.gdf = None if self.gdf is None else self.gdf.copy()
         new.gdf_metrics = None if self.gdf_metrics is None else self.gdf_metrics.copy()
@@ -42,16 +41,16 @@ class SpatialData:
         new._calculated = self._calculated
         return new
 
-    def calculate(self, gdf_raster: gpd.GeoDataFrame):
+    def calculate(self, gdf_raster: gpd.GeoDataFrame) -> None:
         self.gdf_metrics = gdf_raster.copy()
         for metric in self._metrics_list:
             self.gdf_metrics[metric.name] = metric.calculate(self.gdf, gdf_raster)
         self._calculated = True
 
-    def _set_data(self, file, crs):
-        if not isinstance(file, str):
+    def _set_data(self, filename, crs):
+        if not isinstance(filename, str):
             raise TypeError("'data' must be 'path/to/shape/file'")
-        self.gdf = gpd.GeoDataFrame.from_file(file)
+        self.gdf = gpd.GeoDataFrame.from_file(filename)
         if crs is not None:
             self.gdf = self.gdf.to_crs(epsg=crs)
 

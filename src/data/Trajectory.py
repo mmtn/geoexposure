@@ -19,13 +19,13 @@ REQUIRED_COLUMNS = [
 class Trajectory:
     """Time-ordered point observations with derived dwell times."""
 
-    def __init__(self, df: pd.DataFrame, csv_file: str | None = None):
+    def __init__(self, df: pd.DataFrame, source_id: str | None = None):
         assert sorted(df.columns) == sorted(
             REQUIRED_COLUMNS
         ), "DataFrame must have columns 'datetime', 'x', 'y'"
         df[DATETIME] = pd.to_datetime(df[DATETIME], format="%Y-%m-%d %H:%M:%S")
         self.data = df
-        self.csv_file = csv_file
+        self.source_id = source_id
         self._add_dwell_times()
 
     def __len__(self) -> int:

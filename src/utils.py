@@ -269,7 +269,7 @@ def read_csv_directory(
         if file.endswith("csv")
     ]
     return [
-        Trajectory(pd.read_csv(csv), csv_file=os.path.basename(csv))
+        Trajectory(pd.read_csv(csv), source_id=os.path.basename(csv))
         for file_num, csv in enumerate(csv_files)
         if file_num < max_files
     ]
