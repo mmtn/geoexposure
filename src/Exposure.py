@@ -1,6 +1,8 @@
 import datetime as dt
 from datetime import timedelta
 import logging
+from typing import Any
+
 logger = logging.getLogger(__name__)
 
 import numpy as np
@@ -46,7 +48,7 @@ class ExposureSeries:
         metadata = df[meta_cols].copy()
         exposure_cols = [col for col in df.columns if col not in meta_cols]
         exposure_data = df[exposure_cols].copy()
-        return cls(exposure_data=exposure_data, metadata=metadata, source_id=source_id)
+        return cls(exposure_data, metadata, source_id)
 
     @property
     def dataframe(self) -> DataFrame:
@@ -58,32 +60,40 @@ class ExposureSeries:
         exposure_norm = self.exposure_data.div(
             self.metadata["window_length_seconds"], axis=0
         )
-        return ExposureSeries(exposure_data=exposure_norm, metadata=self.metadata)
+        return ExposureSeries(exposure_norm, self.metadata, self.source_id)
 
     def scaled(self) -> "ExposureSeries":
         if "scaling" not in self.metadata.columns:
             raise ValueError("metadata does not contain 'scaling'")
         scaled_exposure = self.exposure_data.mul(self.metadata["scaling"], axis=0)
-        return ExposureSeries(exposure_data=scaled_exposure, metadata=self.metadata)
+        return ExposureSeries(scaled_exposure, self.metadata, self.source_id)
 
     def mean(self) -> pd.Series:
-        return self.exposure_data.mean()
+        """
+        Rescales data based on window durations then returns the mean exposure in each
+        category per timestep in the original Exposure evaluation
+        """
+        window_lengths = self.metadata["window_length_seconds"]
+        normalised_windows = window_lengths / window_lengths.sum()
+        normalised_exposure = self.exposure_data.div(normalised_windows, axis=0)
+        return normalised_exposure.mean()
 
     def plot_over_time(
-        self,
-        ax=None,
-        *,
-        cumulative: bool = False,
-        x_col: str = "window_centre",
-        ylim: tuple[float, float] | None = None,
-        title: str | None = None,
-        apply_scaling: bool = True,
-        auto_ylim_pad: float | None = None,
-        line_kwargs: dict | None = None,
-        legend: bool = True,
-        legend_kwargs: dict | None = None,
-        xtick_rotation: int = 90,
-        show: bool = True,
+            self,
+            ax=None,
+            *,
+            cumulative: bool = False,
+            x_col: str = "window_centre",
+            xlim: tuple[Any, Any] | None = None,
+            ylim: tuple[float, float] | None = None,
+            title: str | None = None,
+            apply_scaling: bool = True,
+            auto_ylim_pad: float | None = None,
+            line_kwargs: dict | None = None,
+            legend: bool = True,
+            legend_kwargs: dict | None = None,
+            xtick_rotation: int = 90,
+            show: bool = True,
     ):
         import matplotlib.pyplot as plt
 
@@ -91,6 +101,13 @@ class ExposureSeries:
 
         if x_col not in series.metadata.columns:
             raise ValueError(f"metadata must contain x_col={x_col!r}")
+
+        for col in ["window_start", "window_end"]:
+            if col not in series.metadata.columns:
+                raise ValueError(
+                    f"metadata must contain '{col}' for window plot. "
+                    "Use plot_over_time with x_col='window_centre' for point plots."
+                )
 
         if line_kwargs is None:
             line_kwargs = {}
@@ -112,17 +129,31 @@ class ExposureSeries:
             fig = ax.figure
 
         plot_df = series.dataframe.sort_values(by=x_col)
+        window_starts = plot_df["window_start"]
+        window_ends = plot_df["window_end"]
 
         for col in series.exposure_data.columns:
             y = plot_df[col]
             if cumulative:
                 y = np.cumsum(y)
 
-            ax.plot(
-                plot_df[x_col],
-                y,
-                "o-",
-                label=col,
+            (ref_line,) = ax.plot([], [], label=col, **line_kwargs)
+            colour = ref_line.get_color()
+
+            ax.hlines(
+                y=y,
+                xmin=plot_df["window_start"],
+                xmax=plot_df["window_end"],
+                colors=colour,
+                **line_kwargs,
+            )
+
+            # Vertical connectors between consecutive segments
+            ax.vlines(
+                x=plot_df["window_end"].iloc[:-1],
+                ymin=y.iloc[1:].values,
+                ymax=y.iloc[:-1].values,
+                colors=colour,
                 **line_kwargs,
             )
 
@@ -138,6 +169,9 @@ class ExposureSeries:
                     ax.set_ylim((0.0, y_max * auto_ylim_pad))
             except Exception:
                 pass
+
+        if xlim is not None:
+            ax.set_xlim(xlim)
 
         if legend:
             fig.legend(**legend_kwargs)
