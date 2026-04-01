@@ -68,6 +68,9 @@ def get_times(
 def get_time_windows(
     start_time: dt.datetime, end_time: dt.datetime, delta: dt.timedelta
 ) -> list[tuple[dt.datetime, dt.datetime]]:
+    if delta is None:
+        return [(start_time, end_time)]
+
     start_new = round_datetime(start_time, delta, to="floor")
     end_new = round_datetime(end_time, delta, to="ceil")
     num_times = int((end_new - start_new) / delta)

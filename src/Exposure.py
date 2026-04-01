@@ -317,7 +317,7 @@ class Exposure:
     def _prepare_trajectory(
             self,
             trajectory: Trajectory,
-            resolution: dt.timedelta,
+            resolution: dt.timedelta | None,
     ) -> Trajectory:
         """
         Args:
@@ -327,6 +327,10 @@ class Exposure:
         Returns:
             a new Trajectory with dwell times in the data
         """
+        if resolution is None and self.gap_method != GapMethod.VORONOI:
+            raise ValueError("Temporal resolution must be set for gap methods other "
+                             "than GapMethod.VORONOI")
+
         match self.gap_method:
             case GapMethod.VORONOI:
                 return trajectory.with_voronoi_dwells()
@@ -414,9 +418,6 @@ class Exposure:
             self.environment.temporal_resolution,
         ]
         valid = [r for r in candidates if r is not None]
-        if not valid:
-            raise ValueError(
-                "timestep must be defined by argument, Exposure, or Environment"
-            )
-        return min(valid)
+        
+        return min(valid) if valid else None
 
