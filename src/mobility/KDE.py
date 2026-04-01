@@ -3,14 +3,21 @@ import numpy as np
 from sklearn.neighbors import KernelDensity
 
 from .. import Environment, Mobility
+from ..Caching import Caching
 from ..data import Trajectory
 
 
-class KDE(Mobility):
+class KDE(Mobility, Caching):
+
+    cache_dir = ".cache/kde"
+
     def __init__(self, kernel: str, bandwidth: float):
         super().__init__()
         self.kernel = kernel
         self.bandwidth = bandwidth
+
+    def _hash_params(self) -> tuple:
+        return self.kernel, self.bandwidth
 
     def _get_estimator(
         self, coordinates: np.ndarray, weights: np.ndarray = None
@@ -44,7 +51,12 @@ class KDE(Mobility):
         estimator = self._get_estimator(coordinates, weights=data.dt)
 
         np.seterr(divide="ignore")
-        log_scores = estimator.score_samples(data.eval_coords)
+        log_scores = self._get_or_compute(
+            fn=estimator.score_samples,
+            args=(data.eval_coords,),
+            hash_args=(*self._hash_params(), coordinates, data.dt),
+            label="kde",
+        )
         np.seterr(divide="warn")
 
         density[data.mask] = np.exp(log_scores)

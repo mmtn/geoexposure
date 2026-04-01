@@ -1,4 +1,5 @@
 import hashlib
+import logging
 import pickle
 import os
 from typing import Any, Callable
@@ -135,10 +136,10 @@ class Caching:
         result = self._load_from_cache(key, label)
 
         if result is not None:
-            print(f"Loading cached {label} ({key})...")
+            logging.info(f"Loading cached {label} ({key})...")
             return result
 
-        print(f"Computing {label} ({key})...")
+        logging.info(f"Computing {label} ({key})...")
         result = fn(*args)
         self._save_to_cache(result, key, label)
         return result

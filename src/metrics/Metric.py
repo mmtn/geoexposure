@@ -1,4 +1,3 @@
-from collections import abc
 from typing import Any
 
 import pandas as pd
