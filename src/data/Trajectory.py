@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 
 from .. import utils
-from ..enums import InterpMethod
+from ..enums import SamplingMethod
 
 
 DATETIME = "datetime"
@@ -297,9 +297,9 @@ class Trajectory:
                     warnings.warn(f"[out of bounds {ii + 1}] {times[ii]}")
             times = times[~out_of_bounds].reset_index(drop=True)
 
-        if method == InterpMethod.NEAREST:
+        if method == SamplingMethod.NEAREST:
             resampled = self._resample_nearest(times)
-        elif method == InterpMethod.INTERP:
+        elif method == SamplingMethod.INTERP:
             resampled = self._resample_interp(times)
         else:
             raise ValueError(f"unknown resampling method: {method}")

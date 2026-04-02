@@ -2,7 +2,7 @@ import datetime as dt
 import numpy as np
 
 from .SpatialData import SpatialData
-from ..enums import TemporalType
+from ..enums import TemporalType, SamplingMethod
 from ..utils import check_iter_types, get_cyclic_timestamp, match_datetime_in_list
 
 
@@ -69,22 +69,26 @@ class TemporalData:
             )
 
     def sample(
-        self, timestamp: dt.datetime, method: str = "nearest"
+        self, timestamp: dt.datetime, method: SamplingMethod = SamplingMethod.NEAREST
     ) -> SpatialData | float:
-        # TODO: implement "prev" and "next" i.e. floor and ceil
+        if method not in SamplingMethod:
+            raise ValueError(f"unknown method for sampling temporal data: {method}")
+
         if self.temporal_type is TemporalType.CYCLIC:
             if self.cycle_duration is None:
                 raise ValueError("cycle_duration must be set for TemporalType.CYCLIC")
             timestamp = get_cyclic_timestamp(timestamp, self.cycle_duration)
-        if method == "nearest":
-            dt_nearest = match_datetime_in_list(
-                timestamp, self._datetime, self.cycle_duration, to="nearest"
-            )
-            return self._get_value_by_key(dt_nearest)
-        elif method == "interp":
+
+        if method == SamplingMethod.INTERP:
             return self._get_value_interpolated(timestamp)
-        else:
-            raise ValueError(f"unknown sample method: {method}")
+        else:  # all other methods use matching logic (floor, ceil, nearest)
+            match = match_datetime_in_list(
+                timestamp,
+                self._datetime,
+                self.cycle_duration,
+                to=method
+            )
+            return self._get_value_by_key(match)
 
     def _get_value_by_key(self, timestamp: dt.datetime) -> SpatialData | float:
         try:

@@ -1,15 +1,18 @@
 import datetime as dt
 import warnings
 import logging
+
+
 logger = logging.getLogger(__name__)
 
 import geopandas as gpd
 import numpy as np
 import pandas as pd
 
-from .data.TemporalData import TemporalData
 from .Caching import Caching
+from .data.TemporalData import TemporalData
 from .data.SpatialData import SpatialData
+from .enums import SamplingMethod
 from .utils import get_gdf_centroids, raster
 
 
@@ -136,8 +139,8 @@ class Environment(Caching):
 
         return merged
 
-    def _get_scaling(
-        self, timestamp: dt.datetime, method: str = "nearest"
+    def scaling_at_datetime(
+        self, timestamp: dt.datetime, method: SamplingMethod = SamplingMethod.NEAREST
     ) -> float:
         if self.temporal_data is None:
             return 1.0

@@ -13,7 +13,7 @@ from src.data.TemporalData import TemporalData
 from src.data.Trajectory import Trajectory
 
 # enums
-from src.enums import TemporalType, InterpMethod, GapMethod
+from src.enums import TemporalType, SamplingMethod, GapMethod
 
 # metrics
 from src.metrics.Proximity import Proximity, ProximityRisk

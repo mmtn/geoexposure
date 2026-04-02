@@ -1,33 +1,33 @@
 import datetime as dt
-from datetime import timedelta
 import logging
 from typing import Any
+
+from .utils import round_datetime
 
 logger = logging.getLogger(__name__)
 
 import numpy as np
 import pandas as pd
-from pandas import DataFrame
 from tqdm import tqdm
 
 from . import Environment, Mobility, utils
 from .data import Trajectory
-from .enums import GapMethod, InterpMethod
+from .enums import GapMethod, SamplingMethod
 
 
 class ExposureSeries:
     META_COLUMNS = (
-        "scaling",
         "window_start",
         "window_centre",
         "window_end",
         "window_length_seconds",
+        "scaling",
     )
 
     def __init__(
         self,
-        exposure_data: DataFrame,
-        metadata: DataFrame,
+        exposure_data: pd.DataFrame,
+        metadata: pd.DataFrame,
         source_id: str | None = None
     ):
         if len(exposure_data) != len(metadata):
@@ -41,7 +41,7 @@ class ExposureSeries:
     @classmethod
     def from_dataframe(
         cls,
-        df: DataFrame,
+        df: pd.DataFrame,
         source_id: str | None = None
     ) -> "ExposureSeries":
         meta_cols = [col for col in cls.META_COLUMNS if col in df.columns]
@@ -51,27 +51,102 @@ class ExposureSeries:
         return cls(exposure_data, metadata, source_id)
 
     @property
-    def dataframe(self) -> DataFrame:
-        return pd.concat([self.exposure_data, self.metadata], axis=1)
+    def dataframe(self) -> pd.DataFrame:
+        return pd.concat([self.metadata, self.exposure_data], axis=1)
 
-    def per_second(self) -> "ExposureSeries":
-        if "window_length_seconds" not in self.metadata.columns:
-            raise ValueError("metadata does not contain 'window_length_seconds'")
-        exposure_norm = self.exposure_data.div(
-            self.metadata["window_length_seconds"], axis=0
+    def aggregate(self, timestep: dt.timedelta) -> "ExposureSeries":
+        """
+        Aggregate windows into a coarser time grid by summing raw exposure
+        integrals within each new window.
+
+        Raw integrals are summed rather than averaged so that the total
+        accumulated exposure is preserved.
+
+        Args:
+            timestep: The target window size.
+        """
+        if not {"window_start", "window_end", "window_length_seconds"}.issubset(
+                self.metadata.columns
+        ):
+            raise ValueError(
+                "metadata must contain 'window_start', 'window_end', and "
+                "'window_length_seconds' to resample"
+            )
+
+        df = self.dataframe.copy()
+        df["_window_bin"] = df["window_start"].apply(
+            lambda t: round_datetime(t, timestep, to="floor")
         )
-        return ExposureSeries(exposure_norm, self.metadata, self.source_id)
 
-    def scaled(self) -> "ExposureSeries":
-        if "scaling" not in self.metadata.columns:
-            raise ValueError("metadata does not contain 'scaling'")
-        scaled_exposure = self.exposure_data.mul(self.metadata["scaling"], axis=0)
-        return ExposureSeries(scaled_exposure, self.metadata, self.source_id)
+        exposure_cols = self.exposure_data.columns.tolist()
+
+        aggregated = df.groupby("_window_bin").agg(
+            **{col: (col, "sum") for col in exposure_cols},
+            window_start=("window_start", "min"),
+            window_end=("window_end", "max"),
+            window_length_seconds=("window_length_seconds", "sum"),
+            scaling=("scaling", "mean"),
+        ).reset_index(drop=True)
+
+        starts = aggregated["window_start"]
+        ends = aggregated["window_end"]
+        aggregated["window_centre"] = starts + ((ends - starts) / 2)
+
+        return ExposureSeries.from_dataframe(aggregated, source_id=self.source_id)
+
+
+    def total(self) -> pd.Series:
+        """
+        Sum of raw exposure integrals across all windows.
+        Units: [exposure units]
+        """
+        return self.exposure_data.sum()
+
+    def mean_rate(self) -> pd.Series:
+        """
+        Total accumulated exposure divided by total elapsed time.
+        Units: [exposure units] per second.
+        """
+        weights = self._window_lengths / self._window_lengths.sum()
+        return self.rate().mul(weights, axis=0).sum()
+
+    def mean_rate_per(self, denominator: dt.timedelta) -> pd.Series:
+        """
+        As mean_rate() but rescaled to an arbitrary time unit.
+        Units: [exposure units] per [denominator].
+        """
+        return self.mean_rate() * denominator.total_seconds()
+
+    def rate(self) -> pd.DataFrame:
+        """
+        Divides each exposure by the window's duration in seconds.
+        Units: [exposure units] per second.
+        """
+        return self.exposure_data.div(self._window_lengths, axis=0)
+
+    def rate_per(self, denominator: dt.timedelta) -> pd.DataFrame:
+        """
+        As rate() but rescaled to an arbitrary time unit.
+        Units: [exposure units] per [denominator].
+        """
+        return self.rate() * denominator.total_seconds()
+
+    def per_second(self) -> pd.DataFrame:
+        return self.rate_per(dt.timedelta(seconds=1))
+
+    def per_hour(self) -> pd.DataFrame:
+        return self.rate_per(dt.timedelta(hours=1))
+
+    def per_day(self) -> pd.DataFrame:
+        return self.rate_per(dt.timedelta(days=1))
+
+    def scaled(self) -> pd.DataFrame:
+        return self.exposure_data.mul(self._scaling, axis=0)
 
     def mean(self) -> pd.Series:
         """
         Rescales data based on window durations then returns the mean exposure in each
-        category per timestep in the original Exposure evaluation
+        category per temporal_resolution in the original Exposure evaluation
         """
         window_lengths = self.metadata["window_length_seconds"]
         normalised_windows = window_lengths / window_lengths.sum()
@@ -97,13 +172,14 @@ class ExposureSeries:
     ):
         import matplotlib.pyplot as plt
 
-        series = self.scaled() if apply_scaling else self
+        exposure_df = self.scaled() if apply_scaling else self.exposure_data.copy()
+        df = pd.concat([self.metadata, exposure_df], axis=1)
 
-        if x_col not in series.metadata.columns:
+        if x_col not in self.metadata.columns:
             raise ValueError(f"metadata must contain x_col={x_col!r}")
 
         for col in ["window_start", "window_end"]:
-            if col not in series.metadata.columns:
+            if col not in self.metadata.columns:
                 raise ValueError(
                     f"metadata must contain '{col}' for window plot. "
                     "Use plot_over_time with x_col='window_centre' for point plots."
@@ -128,11 +204,11 @@ class ExposureSeries:
         else:
             fig = ax.figure
 
-        plot_df = series.dataframe.sort_values(by=x_col)
+        plot_df = df.sort_values(by=x_col)
         window_starts = plot_df["window_start"]
         window_ends = plot_df["window_end"]
 
-        for col in series.exposure_data.columns:
+        for col in exposure_df.columns:
             y = plot_df[col]
             if cumulative:
                 y = np.cumsum(y)
@@ -164,7 +240,7 @@ class ExposureSeries:
             ax.set_ylim(ylim)
         elif auto_ylim_pad is not None:
             try:
-                y_max = float(np.nanmax(series.exposure_data.to_numpy(dtype=float)))
+                y_max = float(np.nanmax(exposure_df.to_numpy(dtype=float)))
                 if np.isfinite(y_max):
                     ax.set_ylim((0.0, y_max * auto_ylim_pad))
             except Exception:
@@ -186,6 +262,17 @@ class ExposureSeries:
 
         return fig, ax
 
+    @property
+    def _scaling(self) -> "ExposureSeries":
+        if "scaling" not in self.metadata.columns:
+            raise ValueError("metadata does not contain 'scaling'")
+        return self.metadata["scaling"]
+
+    @property
+    def _window_lengths(self) -> pd.Series:
+        if "window_length_seconds" not in self.metadata.columns:
+            raise ValueError("metadata does not contain 'window_length_seconds'")
+        return self.metadata["window_length_seconds"]
 
 class Exposure:
     def __init__(
@@ -194,7 +281,7 @@ class Exposure:
         environment: Environment,
         *,
         timestep: dt.timedelta | None = None,
-        interp_method: InterpMethod = InterpMethod.INTERP,
+        interp_method: SamplingMethod = SamplingMethod.INTERP,
         gap_method: GapMethod = GapMethod.VORONOI
     ):
         """
@@ -218,15 +305,19 @@ class Exposure:
         *,
         start_time: dt.datetime | None = None,
         end_time: dt.datetime | None = None,
-        temporal_resolution: dt.timedelta | None = None,
+        timestep: dt.timedelta | None = None,
     ) -> ExposureSeries:
+        effective_resolution = self._resolve_temporal_resolution(timestep)
         summary_df = self._calculate_exposure_dataframe(
             trajectory=trajectory,
             start_time=start_time,
             end_time=end_time,
-            temporal_resolution=temporal_resolution,
+            temporal_resolution=effective_resolution,
         )
-        return ExposureSeries.from_dataframe(summary_df, source_id=trajectory.source_id)
+        series = ExposureSeries.from_dataframe(summary_df, source_id=trajectory.source_id)
+        if timestep is not None and timestep > effective_resolution:
+            series = series.aggregate(timestep)
+        return series
 
     def for_trajectories(
         self,
@@ -237,7 +328,7 @@ class Exposure:
         return [
             self.for_trajectory(
                 trajectory=trajectory,
-                temporal_resolution=temporal_resolution,
+                timestep=temporal_resolution,
             )
             for trajectory in trajectories
         ]
@@ -250,33 +341,7 @@ class Exposure:
         per_second: bool = True,
         apply_scaling: bool = False,
     ) -> pd.DataFrame:
-        """Compute exposure sums from either trajectories or precomputed exposure series.
-
-        Dispatches to the appropriate internal method based on the type of the
-        first element in the input list.
-
-        Args:
-            inputs: Either a list of Trajectory objects or a list of precomputed
-                ExposureSeries objects. The type of the first element determines
-                which internal method is used.
-            temporal_resolution: The temporal resolution to use when computing
-                exposure series from trajectories. Not applicable when passing
-                precomputed ExposureSeries objects.
-            per_second: Whether to normalise exposure values per second before
-                computing sums. Defaults to True.
-            apply_scaling: Whether to apply scaling to the exposure series before
-                computing sums. Defaults to False.
-
-        Returns:
-            A DataFrame containing the exposure sums for each input, with one row
-            per trajectory or exposure series. Rows will include a ``filename``
-            column where a ``source_id`` is present on the ExposureSeries.
-
-        Raises:
-            ValueError: If ``timestep`` is provided alongside a list of
-                precomputed ExposureSeries objects.
-            TypeError: If the input list contains unsupported types.
-        """
+        """Compute exposure sums from either trajectories or precomputed exposure series."""
         if not inputs:
             return pd.DataFrame()
 
@@ -292,7 +357,7 @@ class Exposure:
         elif isinstance(first, ExposureSeries):
             if temporal_resolution is not None:
                 raise ValueError(
-                    "`timestep` is not applicable when passing "
+                    "`temporal_resolution` is not applicable when passing "
                     "precomputed ExposureSeries objects."
                 )
             return self._sums_exposure_series_list(
@@ -389,36 +454,31 @@ class Exposure:
         if end_time is None:
             end_time = trajectory.data["datetime"].max()
 
-        effective_resolution = self._resolve_temporal_resolution(temporal_resolution)
-        trajectory = self._prepare_trajectory(trajectory, effective_resolution)
-        windows = utils.get_time_windows(start_time, end_time, effective_resolution)
+        logging.info(f"Computing exposure between {start_time} and {end_time}")
+
+        trajectory = self._prepare_trajectory(trajectory, temporal_resolution)
+        windows = utils.get_time_windows(start_time, end_time, temporal_resolution)
 
         scaling = []
         durations = []
         centres = []
         exposure_data = []
 
-        logging.info(f"Computing exposure between {start_time} and {end_time}")
-        logging.info(f"Temporal resolution: {effective_resolution}")
-
         last_index = len(windows) - 1
-        for ii, (window_start, window_end) in tqdm(
-                enumerate(windows), total=len(windows), desc="Windows"
+        for ii, (start, end) in tqdm(
+                enumerate(windows), total=len(windows), desc="Calculating exposure"
         ):
-            # Use trajectory bounds where window extends too far
-            start = max(window_start, trajectory.start_time.to_pydatetime())
-            end = min(window_end, trajectory.end_time.to_pydatetime())
-
             window = trajectory.data_in_window(
                 start=start,
                 end=end,
                 include_first=(ii == 0) and self.gap_method != GapMethod.IGNORE,
                 include_last=(ii == last_index) and self.gap_method != GapMethod.IGNORE,
             )
+
             length = end - start
             duration = length.total_seconds()
-            centre = start + length / 2
-            scaling_ii = self.environment._get_scaling(centre, self.interp_method)
+            centre = start + (length / 2)
+            scaling_ii = self.environment.scaling_at_datetime(centre, self.interp_method)
             rho = self.mobility.distribution(window, self.environment)
             exposure_sources = self.environment.sample(centre, self.interp_method)
 
@@ -443,15 +503,16 @@ class Exposure:
 
     def _resolve_temporal_resolution(
             self,
-            temporal_resolution: dt.timedelta | None,
+            timestep: dt.timedelta | None,
     ) -> dt.timedelta:
         """Resolve effective temporal resolution from argument, Exposure, or Environment."""
         candidates = [
-            temporal_resolution,
+            timestep,
             self.timestep,
             self.environment.temporal_resolution,
         ]
         valid = [r for r in candidates if r is not None]
-        
-        return min(valid) if valid else None
+        resolved = min(valid) if valid else None
+        logging.info(f"Using temporal resolution of {resolved}")
+        return resolved
 

@@ -7,14 +7,14 @@ class TemporalType(Enum):
 
 
 class GapMethod(StrEnum):
-    VORONOI = "voronoi"
+    IGNORE = "ignore"
     INTERPOLATE = "interpolate"
     RECENT = "recent"
-    IGNORE = "ignore"
+    VORONOI = "voronoi"
 
 
-class InterpMethod(StrEnum):
-    NEAREST = "nearest"
-    INTERP = "interp"
-    FLOOR = "floor"
+class SamplingMethod(StrEnum):
     CEIL = "ceil"
+    FLOOR = "floor"
+    INTERP = "interp"
+    NEAREST = "nearest"
