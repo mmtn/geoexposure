@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 
 from .. import utils
-from ..enums import SamplingMethod
+from ..enums import SamplingMethod, GapMethod
 
 
 DATETIME = "datetime"
@@ -26,6 +26,12 @@ DWELL_TIME_SECONDS = "dwell_time_seconds"
 DWELL_FORWARD = "_dwell_forward"
 DWELL_BACKWARD = "_dwell_backward"
 
+DWELL_COLUMNS = [
+    DWELL_TIME_SECONDS,
+    DWELL_FORWARD,
+    DWELL_BACKWARD,
+]
+
 class Trajectory:
     """Time-ordered point observations with derived dwell times."""
 
@@ -36,6 +42,7 @@ class Trajectory:
         df[DATETIME] = pd.to_datetime(df[DATETIME], format="%Y-%m-%d %H:%M:%S")
         self.data = df
         self.source_id = source_id
+        self.gap_method = None
 
     def __len__(self) -> int:
         return len(self.data)
@@ -80,6 +87,13 @@ class Trajectory:
         y = self.data[Y]
         return x.max() - x.min(), y.max() - y.min()
 
+    def has_dwell_times(self) -> bool:
+        missing = [
+            col for col in [DWELL_TIME_SECONDS, DWELL_BACKWARD, DWELL_FORWARD]
+            if col not in self.data.columns
+        ]
+        return False if missing else True
+
     def with_voronoi_dwells(self) -> "Trajectory":
         new = Trajectory(self.data[REQUIRED_COLUMNS].copy(), source_id=self.source_id)
         datetimes = new.data[DATETIME]
@@ -94,6 +108,7 @@ class Trajectory:
         new.data[DWELL_TIME_SECONDS] = backward + forward
         new.data[DWELL_BACKWARD] = backward
         new.data[DWELL_FORWARD] = forward
+        new.gap_method = GapMethod.VORONOI
         return new
 
     def with_interpolated_gaps(
@@ -149,7 +164,9 @@ class Trajectory:
         ).sort_values(DATETIME).reset_index(drop=True)
 
         combined = Trajectory(combined_data, source_id=self.source_id)
-        return combined.with_voronoi_dwells()
+        new = combined.with_voronoi_dwells()
+        new.gap_method = GapMethod.INTERPOLATE
+        return new
 
     def with_recent_fill(
             self,
@@ -201,7 +218,9 @@ class Trajectory:
         else:
             combined = data.reset_index(drop=True)
 
-        return Trajectory(combined).with_voronoi_dwells()
+        new = Trajectory(combined).with_voronoi_dwells()
+        new.gap_method = GapMethod.RECENT
+        return new
 
     def with_ignored_gaps(
             self,
@@ -281,8 +300,8 @@ class Trajectory:
 
         new.data[DWELL_BACKWARD] = backward_list
         new.data[DWELL_FORWARD] = forward_list
-        new.data[DWELL_TIME_SECONDS] = \
-            new.data[DWELL_BACKWARD] + new.data[DWELL_FORWARD]
+        new.data[DWELL_TIME_SECONDS] = new.data[DWELL_BACKWARD] + new.data[DWELL_FORWARD]
+        new.gap_method = GapMethod.IGNORE
         return new
 
     def data_in_window(
@@ -292,13 +311,9 @@ class Trajectory:
             include_first: bool = False,
             include_last: bool = False,
     ) -> "Trajectory":
-        missing = [
-            col for col in [DWELL_TIME_SECONDS, DWELL_BACKWARD, DWELL_FORWARD]
-            if col not in self.data.columns
-        ]
-        if missing:
+        if not self.has_dwell_times():
             raise ValueError(
-                f"Trajectory is missing columns: {missing}. "
+                f"Trajectory is missing dwell time columns: {DWELL_COLUMNS}. "
                 "Call a with_*() method before windowing."
             )
 
@@ -318,9 +333,9 @@ class Trajectory:
         )
 
         boundary_indices = set()
-        if include_first:
+        if include_first and self.gap_method != GapMethod.IGNORE:
             boundary_indices.add(df.index[0])
-        if include_last:
+        if include_last and self.gap_method != GapMethod.IGNORE:
             boundary_indices.add(df.index[-1])
 
         mask = (clipped_duration > 0) | df.index.isin(boundary_indices)

@@ -282,7 +282,6 @@ class Exposure:
         *,
         timestep: dt.timedelta | None = None,
         interp_method: SamplingMethod = SamplingMethod.INTERP,
-        gap_method: GapMethod = GapMethod.VORONOI
     ):
         """
 
@@ -296,7 +295,6 @@ class Exposure:
         self.environment = environment
         self.timestep = timestep
         self.interp_method = interp_method
-        self.gap_method = gap_method
         self.environment.calculate()
 
     def for_trajectory(
@@ -413,33 +411,6 @@ class Exposure:
 
         return pd.DataFrame(results)
 
-    def _prepare_trajectory(
-            self,
-            trajectory: Trajectory,
-            resolution: dt.timedelta | None,
-    ) -> Trajectory:
-        """
-        Args:
-            trajectory:
-            resolution:
-
-        Returns:
-            a new Trajectory with dwell times in the data
-        """
-        if resolution is None and self.gap_method != GapMethod.VORONOI:
-            raise ValueError("Temporal resolution must be set for gap methods other "
-                             "than GapMethod.VORONOI")
-
-        match self.gap_method:
-            case GapMethod.VORONOI:
-                return trajectory.with_voronoi_dwells()
-            case GapMethod.INTERPOLATE:
-                return trajectory.with_interpolated_gaps(resolution)
-            case GapMethod.RECENT:
-                return trajectory.with_recent_fill(resolution)
-            case GapMethod.IGNORE:
-                return trajectory.with_ignored_gaps(resolution)
-
     def _calculate_exposure_dataframe(
         self,
         trajectory: Trajectory,
@@ -456,9 +427,10 @@ class Exposure:
 
         logging.info(f"Computing exposure between {start_time} and {end_time}")
 
-        trajectory = self._prepare_trajectory(trajectory, temporal_resolution)
         windows = utils.get_time_windows(start_time, end_time, temporal_resolution)
 
+        ## REFACTOR FROM HERE
+        #
         scaling = []
         durations = []
         centres = []
@@ -471,8 +443,8 @@ class Exposure:
             window = trajectory.data_in_window(
                 start=start,
                 end=end,
-                include_first=(ii == 0) and self.gap_method != GapMethod.IGNORE,
-                include_last=(ii == last_index) and self.gap_method != GapMethod.IGNORE,
+                include_first=(ii == 0), # and self.gap_method != GapMethod.IGNORE,
+                include_last=(ii == last_index), # and self.gap_method != GapMethod.IGNORE,
             )
 
             length = end - start
@@ -498,6 +470,9 @@ class Exposure:
         summary_df["window_centre"] = centres
         summary_df["window_end"] = list(window_ends)
         summary_df["window_length_seconds"] = durations
+        #
+        ## END REFACTOR
+
         logging.info("Exposure calculation complete")
         return summary_df
 
