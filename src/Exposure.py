@@ -421,9 +421,9 @@ class Exposure:
     ) -> pd.DataFrame:
 
         if start_time is None:
-            start_time = trajectory.data["datetime"].min()
+            start_time = trajectory.df["datetime"].min()
         if end_time is None:
-            end_time = trajectory.data["datetime"].max()
+            end_time = trajectory.df["datetime"].max()
 
         logging.info(f"Computing exposure between {start_time} and {end_time}")
 

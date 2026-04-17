@@ -40,63 +40,63 @@ class Trajectory:
             REQUIRED_COLUMNS
         ), "DataFrame must have columns 'datetime', 'x', 'y'"
         df[DATETIME] = pd.to_datetime(df[DATETIME], format="%Y-%m-%d %H:%M:%S")
-        self.data = df
+        self.df = df
         self.source_id = source_id
         self.gap_method = None
 
     def __len__(self) -> int:
-        return len(self.data)
+        return len(self.df)
 
     def copy(self, deep: bool = True) -> "Trajectory":
         """Return a (deep) copy of this Trajectory."""
         new = self.__class__.__new__(self.__class__)
-        new.data = self.data.copy(deep=deep)
+        new.df = self.df.copy(deep=deep)
         new.source_id = self.source_id
         return new
 
     @property
     def start_time(self) -> pd.Timestamp:
-        return self.data[DATETIME].min()
+        return self.df[DATETIME].min()
 
     @property
     def end_time(self) -> pd.Timestamp:
-        return self.data[DATETIME].max()
+        return self.df[DATETIME].max()
 
     @property
     def duration_in_seconds(self) -> float:
-        time_difference = self.data[DATETIME].max() - self.data[DATETIME].min()
+        time_difference = self.df[DATETIME].max() - self.df[DATETIME].min()
         return time_difference.total_seconds()
 
     @property
     def coordinates(self) -> np.ndarray:
-        return np.array([self.data[X], self.data[Y]])
+        return np.array([self.df[X], self.df[Y]])
 
     @property
     def bounds(self) -> tuple:
         if len(self) == 0:
             return None, None, None, None
-        x = self.data[X]
-        y = self.data[Y]
+        x = self.df[X]
+        y = self.df[Y]
         return x.min(), x.max(), y.min(), y.max()
 
     @property
     def extent(self) -> tuple:
         if len(self) == 0:
             return 0.0, 0.0
-        x = self.data[X]
-        y = self.data[Y]
+        x = self.df[X]
+        y = self.df[Y]
         return x.max() - x.min(), y.max() - y.min()
 
     def has_dwell_times(self) -> bool:
         missing = [
             col for col in [DWELL_TIME_SECONDS, DWELL_BACKWARD, DWELL_FORWARD]
-            if col not in self.data.columns
+            if col not in self.df.columns
         ]
         return False if missing else True
 
     def with_voronoi_dwells(self) -> "Trajectory":
-        new = Trajectory(self.data[REQUIRED_COLUMNS].copy(), source_id=self.source_id)
-        datetimes = new.data[DATETIME]
+        new = Trajectory(self.df[REQUIRED_COLUMNS].copy(), source_id=self.source_id)
+        datetimes = new.df[DATETIME]
 
         backward = (datetimes - datetimes.shift(1)).dt.total_seconds().fillna(0) / 2
         forward = (datetimes.shift(-1) - datetimes).dt.total_seconds().fillna(0) / 2
@@ -105,9 +105,9 @@ class Trajectory:
         backward.iloc[[0, -1]] = 0.0
         forward.iloc[[0, -1]] = 0.0
 
-        new.data[DWELL_TIME_SECONDS] = backward + forward
-        new.data[DWELL_BACKWARD] = backward
-        new.data[DWELL_FORWARD] = forward
+        new.df[DWELL_TIME_SECONDS] = backward + forward
+        new.df[DWELL_BACKWARD] = backward
+        new.df[DWELL_FORWARD] = forward
         new.gap_method = GapMethod.VORONOI
         return new
 
@@ -135,7 +135,7 @@ class Trajectory:
         start = start_time or self.start_time.to_pydatetime()
         end = end_time or self.end_time.to_pydatetime()
 
-        datetimes = pd.to_datetime(self.data[DATETIME])
+        datetimes = pd.to_datetime(self.df[DATETIME])
 
         # Collect synthetic timestamps only within gaps larger than resolution
         synthetic_times = []
@@ -160,7 +160,7 @@ class Trajectory:
         synthesised = self.resample(synthetic_times, method=SamplingMethod.INTERP)
 
         combined_data = pd.concat(
-            [self.data[REQUIRED_COLUMNS], synthesised.data[REQUIRED_COLUMNS]]
+            [self.df[REQUIRED_COLUMNS], synthesised.df[REQUIRED_COLUMNS]]
         ).sort_values(DATETIME).reset_index(drop=True)
 
         combined = Trajectory(combined_data, source_id=self.source_id)
@@ -195,8 +195,8 @@ class Trajectory:
         start = start_time or self.start_time.to_pydatetime()
         end = end_time or self.end_time.to_pydatetime()
 
-        data = self.data[
-            (self.data[DATETIME] >= start) & (self.data[DATETIME] <= end)
+        data = self.df[
+            (self.df[DATETIME] >= start) & (self.df[DATETIME] <= end)
             ].copy()
 
         datetimes = data[DATETIME].sort_values()
@@ -213,7 +213,7 @@ class Trajectory:
         if fill_times:
             filled = self.resample(fill_times, method=SamplingMethod.MOST_RECENT)
             combined = pd.concat(
-                [data, filled.data], ignore_index=True
+                [data, filled.df], ignore_index=True
             ).sort_values(DATETIME).reset_index(drop=True)
         else:
             combined = data.reset_index(drop=True)
@@ -250,8 +250,8 @@ class Trajectory:
         windows = utils.get_time_windows(start, end, resolution)
         window_length = windows[0][1] - windows[0][0]
 
-        new = Trajectory(self.data[REQUIRED_COLUMNS].copy(), source_id=self.source_id)
-        datetimes = new.data[DATETIME]
+        new = Trajectory(self.df[REQUIRED_COLUMNS].copy(), source_id=self.source_id)
+        datetimes = new.df[DATETIME]
 
         def find_window_bound(
                 t: pd.Timestamp,
@@ -298,9 +298,9 @@ class Trajectory:
             backward_list.append(backward)
             forward_list.append(forward)
 
-        new.data[DWELL_BACKWARD] = backward_list
-        new.data[DWELL_FORWARD] = forward_list
-        new.data[DWELL_TIME_SECONDS] = new.data[DWELL_BACKWARD] + new.data[DWELL_FORWARD]
+        new.df[DWELL_BACKWARD] = backward_list
+        new.df[DWELL_FORWARD] = forward_list
+        new.df[DWELL_TIME_SECONDS] = new.df[DWELL_BACKWARD] + new.df[DWELL_FORWARD]
         new.gap_method = GapMethod.IGNORE
         return new
 
@@ -317,7 +317,7 @@ class Trajectory:
                 "Call a with_*() method before windowing."
             )
 
-        df = self.data.copy()
+        df = self.df.copy()
         datetimes = df[DATETIME]
         dt_backwards = pd.to_timedelta(df[DWELL_BACKWARD], unit="s")
         dt_forwards = pd.to_timedelta(df[DWELL_FORWARD], unit="s")
@@ -342,7 +342,7 @@ class Trajectory:
 
         df_mask = df[mask]
         window = Trajectory(df=df_mask[REQUIRED_COLUMNS])
-        window.data[DWELL_TIME_SECONDS] = clipped_duration[mask]
+        window.df[DWELL_TIME_SECONDS] = clipped_duration[mask]
         return window
 
     def resample(self, times: list[dt.datetime], method: SamplingMethod) -> "Trajectory":
@@ -358,8 +358,8 @@ class Trajectory:
         times = pd.Series(times)
 
         # Warn and drop times outside the trajectory bounds
-        t_min = self.data[DATETIME].min()
-        t_max = self.data[DATETIME].max()
+        t_min = self.df[DATETIME].min()
+        t_max = self.df[DATETIME].max()
         out_of_bounds = (times < t_min) | (times > t_max)
         if out_of_bounds.any():
             warnings.warn(
@@ -385,17 +385,17 @@ class Trajectory:
     def _resample_previous(self, times: pd.Series) -> pd.DataFrame:
         """Select the most recent recorded point before or at each requested time."""
         indices = [
-            self.data[self.data[DATETIME] <= t][DATETIME].argmax()
+            self.df[self.df[DATETIME] <= t][DATETIME].argmax()
             for t in times
         ]
-        resampled = self.data.iloc[indices][REQUIRED_COLUMNS].copy()
+        resampled = self.df.iloc[indices][REQUIRED_COLUMNS].copy()
         resampled[DATETIME] = times.values
         return resampled.reset_index(drop=True)
 
     def _resample_nearest(self, times: pd.Series) -> pd.DataFrame:
         """Select the closest recorded point for each requested time."""
-        indices = [(self.data[DATETIME] - t).abs().argmin() for t in times]
-        resampled = self.data.iloc[indices][REQUIRED_COLUMNS].copy()
+        indices = [(self.df[DATETIME] - t).abs().argmin() for t in times]
+        resampled = self.df.iloc[indices][REQUIRED_COLUMNS].copy()
         resampled[DATETIME] = times.values
         return resampled.reset_index(drop=True)
 
@@ -403,8 +403,8 @@ class Trajectory:
         """Linearly interpolate x/y between adjacent timestamps."""
         rows = []
         for t in times:
-            before = self.data[self.data[DATETIME] <= t].iloc[-1]
-            after = self.data[self.data[DATETIME] >= t].iloc[0]
+            before = self.df[self.df[DATETIME] <= t].iloc[-1]
+            after = self.df[self.df[DATETIME] >= t].iloc[0]
 
             if before[DATETIME] == after[DATETIME]:
                 x = before[X]
@@ -422,13 +422,13 @@ class Trajectory:
 
     def get_data_arrays(self) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         """Extract sorted numpy arrays from a trajectory."""
-        x = self.data[X].to_numpy(dtype=float)
-        y = self.data[Y].to_numpy(dtype=float)
-        t = self.data[DATETIME].to_numpy(dtype=np.datetime64)
+        x = self.df[X].to_numpy(dtype=float)
+        y = self.df[Y].to_numpy(dtype=float)
+        t = self.df[DATETIME].to_numpy(dtype=np.datetime64)
         order = np.argsort(t)
 
-        if DWELL_TIME_SECONDS in self.data.columns:
-            dt = self.data[DWELL_TIME_SECONDS].to_numpy(dtype=float)
+        if DWELL_TIME_SECONDS in self.df.columns:
+            dt = self.df[DWELL_TIME_SECONDS].to_numpy(dtype=float)
         else:
             logging.warning(
                 "Trajectory has no dwell times — using uniform weights. "
