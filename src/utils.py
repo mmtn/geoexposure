@@ -10,8 +10,6 @@ import pandas as pd
 from shapely import Polygon, Point
 from tqdm import tqdm
 
-from .data.Trajectory import Trajectory
-
 #
 
 REFERENCE_TIME = dt.datetime(
@@ -71,13 +69,24 @@ def get_time_windows(
     if delta is None:
         return [(start_time, end_time)]
 
-    start_new = round_datetime(start_time, delta, to="floor")
-    end_new = round_datetime(end_time, delta, to="ceil")
-    num_times = int((end_new - start_new) / delta)
-    return [
-        (start_new + (ii * delta), start_new + ((ii + 1) * delta))
+    start_rounded_up = round_datetime(start_time, delta, to="ceil")
+    end_rounded_down = round_datetime(end_time, delta, to="floor")
+    num_times = int((end_rounded_down - start_rounded_up) / delta)
+
+    windows = [
+        (start_rounded_up + (ii * delta), start_rounded_up + ((ii + 1) * delta))
         for ii in range(num_times)
     ]
+
+    # Prepend partial window at the start
+    if start_rounded_up > start_time:
+        windows.insert(0, (start_time, start_rounded_up))
+
+    # Append partial window at the end
+    if end_rounded_down < end_time:
+        windows.append((end_rounded_down, end_time))
+
+    return windows
 
 
 def check_iter_types(iterable: abc.Iterable, data_type: type) -> bool:
@@ -239,6 +248,7 @@ def match_datetime_in_list(
         else:
             before = sorted_list[index - 1]
             after = sorted_list[index]
+            # "less than or equal" here returns earliest of two equidistant values
             if target - before <= after - target:
                 match = before
             else:
@@ -251,31 +261,6 @@ def match_datetime_in_list(
         match = first
 
     return match
-
-
-def read_csv_directory(
-    data_directory: str, max_files: int | float = np.inf
-) -> list[Trajectory]:
-    """Read CSV files in a directory into `Trajectory` objects.
-
-    Args:
-        data_directory: Directory containing CSV files with at least
-            ``datetime``, ``x``, and ``y`` columns.
-        max_files: Maximum number of files to read.
-
-    Returns:
-        Trajectories created from each CSV.
-    """
-    csv_files = [
-        os.path.join(data_directory, file)
-        for file in os.listdir(data_directory)
-        if file.endswith("csv")
-    ]
-    return [
-        Trajectory(pd.read_csv(csv), source_id=os.path.basename(csv))
-        for file_num, csv in enumerate(csv_files)
-        if file_num < max_files
-    ]
 
 
 def get_gdf_centroids(

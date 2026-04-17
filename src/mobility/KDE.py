@@ -10,6 +10,7 @@ from ..data import Trajectory
 class KDE(Mobility, Caching):
 
     cache_dir = ".cache/kde"
+    MAX_BUFFER_METRES = 1000
 
     def __init__(self, kernel: str, bandwidth: float):
         super().__init__()
@@ -38,7 +39,7 @@ class KDE(Mobility, Caching):
     ) -> gpd.GeoDataFrame:
 
         standard_deviations = 3
-        buffer = self.bandwidth * standard_deviations
+        buffer = min(self.bandwidth * standard_deviations, self.MAX_BUFFER_METRES)
         data = self._get_mobility_data(trajectory, environment, bounds, buffer)
 
         if len(data.x) == 0 or not np.any(data.mask) or data.dt.sum() == 0:
@@ -56,6 +57,7 @@ class KDE(Mobility, Caching):
             args=(data.eval_coords,),
             hash_args=(*self._hash_params(), coordinates, data.dt),
             label="kde",
+            verbose=False,
         )
         np.seterr(divide="warn")
 

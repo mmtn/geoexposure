@@ -48,8 +48,6 @@ class SpatialData:
         self._calculated = True
 
     def _set_data(self, filename, crs):
-        if not isinstance(filename, str):
-            raise TypeError("'data' must be 'path/to/shape/file'")
         self.gdf = gpd.GeoDataFrame.from_file(filename)
         if crs is not None:
             self.gdf = self.gdf.to_crs(epsg=crs)

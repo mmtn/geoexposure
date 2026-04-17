@@ -1,5 +1,8 @@
-import hashlib
 import logging
+
+logger = logging.getLogger(__name__)
+
+import hashlib
 import pickle
 import os
 from typing import Any, Callable
@@ -121,6 +124,7 @@ class Caching:
         args: tuple,
         hash_args: tuple = (),
         label: str = "cache",
+        verbose: bool = True,
     ) -> Any:
         """Returns a cached result if available, otherwise computes and caches it.
 
@@ -136,10 +140,12 @@ class Caching:
         result = self._load_from_cache(key, label)
 
         if result is not None:
-            logging.info(f"Loading cached {label} ({key})...")
+            if verbose:
+                logger.info(f"Loading cached {label} ({key})...")
             return result
 
-        logging.info(f"Computing {label} ({key})...")
+        if verbose:
+            logger.info(f"Computing {label} ({key})...")
         result = fn(*args)
         self._save_to_cache(result, key, label)
         return result

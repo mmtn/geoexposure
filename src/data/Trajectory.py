@@ -1,4 +1,5 @@
 import datetime as dt
+import os
 import warnings
 import logging
 from typing import Literal
@@ -38,6 +39,13 @@ class Trajectory:
 
     def __len__(self) -> int:
         return len(self.data)
+
+    def copy(self, deep: bool = True) -> "Trajectory":
+        """Return a (deep) copy of this Trajectory."""
+        new = self.__class__.__new__(self.__class__)
+        new.data = self.data.copy(deep=deep)
+        new.source_id = self.source_id
+        return new
 
     @property
     def start_time(self) -> pd.Timestamp:
@@ -96,30 +104,52 @@ class Trajectory:
     ) -> "Trajectory":
         """Return a trajectory with gaps filled by linear interpolation.
 
-        Synthesises new observations at regular intervals across the full
-        trajectory duration, interpolating x/y positions between known points.
-        Useful when movement between observations is expected to be continuous.
+        Only interpolates across gaps larger than the resolution. Original
+        observations are preserved unchanged.
 
         Args:
-            resolution: Time step between synthesised observations.
+            resolution: Minimum gap size to interpolate across. Also sets
+                the time step between synthesised observations within gaps.
             start_time: Start of the interpolation range. Defaults to the
                 trajectory start time.
             end_time: End of the interpolation range. Defaults to the
                 trajectory end time.
         Returns:
-            A new Trajectory with interpolated observations at regular intervals.
+            A new Trajectory with gap-filling interpolated observations.
         """
         start = start_time or self.start_time.to_pydatetime()
         end = end_time or self.end_time.to_pydatetime()
 
-        times = []
-        current = start
-        # Go one window past the end
-        while current <= end:
-            times.append(current)
-            current += resolution
+        datetimes = pd.to_datetime(self.data[DATETIME])
 
-        return self.resample(times, method="interp").with_voronoi_dwells()
+        # Collect synthetic timestamps only within gaps larger than resolution
+        synthetic_times = []
+        for ii in range(len(datetimes) - 1):
+            t_curr = datetimes.iloc[ii].to_pydatetime()
+            t_next = datetimes.iloc[ii + 1].to_pydatetime()
+            gap = t_next - t_curr
+
+            if gap > resolution:
+                # Fill the gap at regular intervals, excluding endpoints
+                # (original points are kept as-is)
+                current = t_curr + resolution
+                while current < t_next:
+                    if start <= current <= end:
+                        synthetic_times.append(current)
+                    current += resolution
+
+        if not synthetic_times:
+            return self
+
+        # Resample only at synthetic times and merge with originals
+        synthesised = self.resample(synthetic_times, method=SamplingMethod.INTERP)
+
+        combined_data = pd.concat(
+            [self.data[REQUIRED_COLUMNS], synthesised.data[REQUIRED_COLUMNS]]
+        ).sort_values(DATETIME).reset_index(drop=True)
+
+        combined = Trajectory(combined_data, source_id=self.source_id)
+        return combined.with_voronoi_dwells()
 
     def with_recent_fill(
             self,
@@ -127,30 +157,51 @@ class Trajectory:
             start_time: dt.datetime | None = None,
             end_time: dt.datetime | None = None,
     ) -> "Trajectory":
-        """Return a trajectory with gaps filled by carrying the last known position forward.
+        """Return a trajectory with gaps longer than ``resolution`` filled by
+        carrying the last known position forward.
 
-        At each time step, the most recent observed position is used. This is
-        equivalent to a zero-order hold and is appropriate when the subject is
-        likely stationary between observations.
+        Original observations are preserved. Synthesised points are inserted
+        only in sections where no observation exists for longer than
+        ``resolution``.
 
         Args:
-            resolution: Time step between synthesised observations.
+            resolution: Maximum allowable gap between observations. Gaps longer
+                than this will be filled at this interval.
             start_time: Start of the fill range. Defaults to the trajectory
                 start time.
             end_time: End of the fill range. Defaults to the trajectory end time.
+
         Returns:
-            A new Trajectory with positions carried forward at regular intervals.
+            A new Trajectory with original observations preserved and gaps
+            filled by carrying the last known position forward.
         """
         start = start_time or self.start_time.to_pydatetime()
         end = end_time or self.end_time.to_pydatetime()
 
-        times = []
-        current = start
-        while current <= end:
-            times.append(current)
-            current += resolution
+        data = self.data[
+            (self.data[DATETIME] >= start) & (self.data[DATETIME] <= end)
+            ].copy()
 
-        return self.resample(times, method="nearest").with_voronoi_dwells()
+        datetimes = data[DATETIME].sort_values()
+        fill_times = []
+
+        for t_start, t_end in zip(datetimes.iloc[:-1], datetimes.iloc[1:]):
+            gap = t_end - t_start
+            if gap > resolution:
+                current = t_start + resolution
+                while current < t_end:
+                    fill_times.append(current)
+                    current += resolution
+
+        if fill_times:
+            filled = self.resample(fill_times, method=SamplingMethod.MOST_RECENT)
+            combined = pd.concat(
+                [data, filled.data], ignore_index=True
+            ).sort_values(DATETIME).reset_index(drop=True)
+        else:
+            combined = data.reset_index(drop=True)
+
+        return Trajectory(combined).with_voronoi_dwells()
 
     def with_ignored_gaps(
             self,
@@ -205,7 +256,11 @@ class Trajectory:
                 t_prev = datetimes.iloc[ii - 1]
                 gap_back = (t - t_prev).total_seconds()
                 if gap_back > window_length.total_seconds():
-                    backward = (t - find_window_bound(t, "start")).total_seconds()
+                    # Cap at distance to window start, not full window
+                    backward = min(
+                        (t - find_window_bound(t, "start")).total_seconds(),
+                        window_length.total_seconds() / 2,
+                    )
                 else:
                     backward = gap_back / 2
 
@@ -213,7 +268,11 @@ class Trajectory:
                 t_next = datetimes.iloc[ii + 1]
                 gap_forward = (t_next - t).total_seconds()
                 if gap_forward > window_length.total_seconds():
-                    forward = (find_window_bound(t, "end") - t).total_seconds()
+                    # Cap at distance to window end, not full window
+                    forward = min(
+                        (find_window_bound(t, "end") - t).total_seconds(),
+                        window_length.total_seconds() / 2,
+                    )
                 else:
                     forward = gap_forward / 2
 
@@ -271,7 +330,7 @@ class Trajectory:
         window.data[DWELL_TIME_SECONDS] = clipped_duration[mask]
         return window
 
-    def resample(self, times: list[dt.datetime], method: str) -> "Trajectory":
+    def resample(self, times: list[dt.datetime], method: SamplingMethod) -> "Trajectory":
         """Resample the trajectory at the given times.
 
         Args:
@@ -299,12 +358,24 @@ class Trajectory:
 
         if method == SamplingMethod.NEAREST:
             resampled = self._resample_nearest(times)
+        elif method == SamplingMethod.MOST_RECENT:
+            resampled = self._resample_previous(times)
         elif method == SamplingMethod.INTERP:
             resampled = self._resample_interp(times)
         else:
             raise ValueError(f"unknown resampling method: {method}")
 
         return Trajectory(resampled)
+
+    def _resample_previous(self, times: pd.Series) -> pd.DataFrame:
+        """Select the most recent recorded point before or at each requested time."""
+        indices = [
+            self.data[self.data[DATETIME] <= t][DATETIME].argmax()
+            for t in times
+        ]
+        resampled = self.data.iloc[indices][REQUIRED_COLUMNS].copy()
+        resampled[DATETIME] = times.values
+        return resampled.reset_index(drop=True)
 
     def _resample_nearest(self, times: pd.Series) -> pd.DataFrame:
         """Select the closest recorded point for each requested time."""
@@ -351,3 +422,28 @@ class Trajectory:
             dt = np.ones(len(t))  # Equal weighting if no dwell times
 
         return x[order], y[order], t[order], dt[order]
+
+
+def read_csv_directory(
+    data_directory: str, max_files: int | float = np.inf
+) -> list[Trajectory]:
+    """Read CSV files in a directory into `Trajectory` objects.
+
+    Args:
+        data_directory: Directory containing CSV files with at least
+            ``datetime``, ``x``, and ``y`` columns.
+        max_files: Maximum number of files to read.
+
+    Returns:
+        Trajectories created from each CSV.
+    """
+    csv_files = [
+        os.path.join(data_directory, file)
+        for file in os.listdir(data_directory)
+        if file.endswith("csv")
+    ]
+    return [
+        Trajectory(pd.read_csv(csv), source_id=os.path.basename(csv))
+        for file_num, csv in enumerate(csv_files)
+        if file_num < max_files
+    ]

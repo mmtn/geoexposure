@@ -24,11 +24,8 @@ class MobilityData:
 
 
 class Mobility(ABC):
-    # TODO: subclass for new method
-    # TODO: precompute and store spatial distribution(s)
     # TODO: are there issues with few data points at high temporal resolutions?
     # TODO: normalisation options
-    # TODO: decide on possible methods for Mobility model
 
     @abstractmethod
     def distribution(

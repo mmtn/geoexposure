@@ -17,4 +17,5 @@ class SamplingMethod(StrEnum):
     CEIL = "ceil"
     FLOOR = "floor"
     INTERP = "interp"
+    MOST_RECENT = "recent"
     NEAREST = "nearest"
