@@ -1,0 +1,100 @@
+"""Proximity metric: distance from each raster centroid to the chosen geometries."""
+import logging
+
+logger = logging.getLogger(__name__)
+
+import geopandas as gpd
+import pandas as pd
+
+from ..core.utils import get_gdf_centroids
+from .base import Metric
+
+
+class Proximity(Metric):
+    """Proximity metric: distance from each raster centroid to the chosen geometries."""
+    metric_title = "proximity"
+
+    def __init__(
+            self,
+            column: str | None = None,
+            value: int | float | None = None,
+    ) -> None:
+        """Initialise a Proximity metric with optional arguments to filter the input data."""
+        super().__init__()
+        if (column is None) ^ (value is None):
+            raise ValueError("Both 'column' and 'value' must be set, or both must be None.")
+        self.column = column
+        self.value = value
+        self.name = self.get_name(self.column, self.value)
+
+    def _hash_params(self) -> tuple:
+        """Additional hashing parameters for :class:`Cachable` method _make_hash()."""
+        return self.column, self.value
+
+    def _calculate_metric(
+            self,
+            gdf_input: gpd.GeoDataFrame,
+            gdf_raster: gpd.GeoDataFrame,
+    ) -> pd.Series:
+        """Calculate the distance from rasterised centroids to the filtered input geometry.
+
+        Applies a filter to the input geometries if ``column`` and ``value`` are defined in this
+        instance. Distances are calculated from each centroid to the nearest edge of the input
+        geometry.
+
+        Args:
+            gdf_input: GeoDataFrame with input geometry
+            gdf_raster: rasterised GeoDataFrame
+
+        Returns:
+            pd.Series: list of distances
+        """
+        if self.column is not None:
+            if self.column not in gdf_input.columns:
+                raise KeyError(f"Column {self.column!r} not found in input GeoDataFrame.")
+            if self.value not in gdf_input[self.column].values:
+                raise ValueError(f"value '{self.value!r}' not found in '{self.column!r}' column")
+            gdf_to = gdf_input[gdf_input[self.column] == self.value]
+        else:
+            gdf_to = gdf_input
+
+        gdf_from = gdf_raster
+        proximity = calculate_gdf_proximity(gdf_from, gdf_to)
+
+        self.data = pd.Series(proximity)
+        return self.data
+
+
+def calculate_gdf_proximity(gdf_from: gpd.GeoDataFrame, gdf_to: gpd.GeoDataFrame) -> list[float]:
+    """Compute nearest distance from each geometry in ``gdf_from`` to ``gdf_to``."""
+    if not isinstance(gdf_from, gpd.GeoDataFrame) or not isinstance(gdf_to, gpd.GeoDataFrame):
+        raise TypeError("Inputs must be GeoDataFrames with a 'geometry' column")
+
+    geoms_from = gdf_from.geometry
+
+    if geoms_from.geom_type.isin(["Polygon", "MultiPolygon"]).all():
+        geoms_from, _ = get_gdf_centroids(gdf_from)
+        geoms_from = gpd.GeoSeries(geoms_from, name="geometry")
+
+    if not geoms_from.geom_type.eq("Point").all():
+        raise ValueError("'from' geometries must be Points or Polygons convertible to centroids")
+
+    gdf_points = gpd.GeoDataFrame(geometry=geoms_from, crs=gdf_from.crs)
+
+    # Spatial join to find the nearest geometry in gdf_to for each geometry in gdf_from
+    joined = gpd.sjoin_nearest(
+        gdf_points,
+        gdf_to[["geometry"]],
+        how="left",
+        distance_col="distance",
+    )
+
+    # One distance per source row: take minima if there are ties
+    distance_minima = (
+        joined["distance"]
+        .groupby(joined.index)  # group by left index
+        .min()
+        .reindex(gdf_points.index)  # ensure order & length match gdf_from
+    )
+
+    return distance_minima.to_list()

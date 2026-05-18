@@ -1,0 +1,90 @@
+[project]
+name = "TrajectoryExposure"
+description = "Compute environmental exposure from geospatial data and trajectory data"
+version = "0.1.0-beta"
+authors = [
+    { name = "Martin J. Cyster" }
+]
+maintainers = [
+    { name = "Martin J. Cyster" },
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Programming Language :: Python :: 3.12",
+]
+license = { file = "LICENSE" }
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "numpy>=2.0,<3.0",
+    "pandas>=2.2,<3.0",
+    "scipy>=1.13,<2.0",
+    "scikit-learn>=1.5,<2.0",
+    "geopandas>=1.0,<2.0",
+    "shapely>=2.0,<3.0",
+    "matplotlib>=3.8,<4.0",
+]
+
+
+[tool.ruff]
+#extend-include = ["*.ipynb"]  # To include Jupyter notebooks into checking
+fix = true
+line-length = 99            # same as black
+show-fixes = true
+
+
+[tool.ruff.lint]
+allowed-confusables = ["⨯", "α", "β", "γ", "σ"]
+select = [
+    "A", # builtins
+    "ANN", # annotations
+    "ARG", # unused arguments
+    "ASYNC", # Adds checks for asynchronous
+    "B", # bugbear
+    "BLE", # Blind exceptions
+    "C", # Encourage comprehensions
+    "C90", # mccabe complexity
+    "D", # pydocstyle
+    "E", # pycodestyle
+    "ERA", # remove commented out code
+    "F", # pyflakes
+    "FBT", # Encourages keyword only booleans
+    "FIX", # Notes any todo/fixme/hack annotations
+    "FLY", # Fixes old format to f-strings
+    "I", # isort
+    "ISC", # Fix implicit string concatenation
+    "N", # pep8-naming
+    "NPY", # numpy
+    "PERF", # Perflint, avoid unnecessary casting
+    "PIE", # pie Conciseness
+    "PL", # pylint
+    "PT", # pytest
+    "RET", # return, keeps returns clean
+    "RUF", # ruff
+    "S", # bandit
+    "TCH", # type checking
+    # "TRY",   # Tryceratops, better errors
+    "UP", # Pyupgrade encourages latest syntax
+    "W", # Warnings
+]
+# ignore specific violations
+ignore = []
+fixable = ["ALL"] # Autofix for all safe enabled rules when `--fix` is provided.
+unfixable = []
+
+# exclude the following patterns from linting
+exclude = [
+    ".git",
+    ".venv",
+    "__pycache__",
+    ".cache",
+    "data",
+    "tests",
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.per-file-ignores]
+#"__init__.py" = ["F401"]
+#"*.ipynb" = ["ERA001"]

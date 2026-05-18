@@ -5,9 +5,10 @@
 
 # Data directories
 /data
-src/tests/data/gis
-src/tests/data/trajectories
+TrajectoryExposure/tests/data/gis
+TrajectoryExposure/tests/data/trajectories
 
 # Cache
 .cache
-local_scripts
+local
+/archived/
