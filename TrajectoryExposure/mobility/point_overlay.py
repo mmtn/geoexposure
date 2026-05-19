@@ -1,32 +1,45 @@
-import logging
+"""Point overlay mobility model.
 
-logger = logging.getLogger(__name__)
+:class:`PointOverlay` estimates the spatial occupancy distribution of a
+trajectory by counting the number of recorded positions falling within each
+cell of the environment raster grid. It is the simplest available mobility
+model and carries no assumptions about movement between observations.
+"""
+
+import logging
+from typing import TYPE_CHECKING
 
 import geopandas as gpd
 import numpy as np
 
-from ..data import Trajectory
-from TrajectoryExposure.core.environment import Environment
 from ..mobility import Mobility
+
+if TYPE_CHECKING:
+    from ..core.environment import Environment
+    from ..data import Trajectory
+
+logger = logging.getLogger(__name__)
 
 
 class PointOverlay(Mobility):
     """Mobility model counting points falling within each grid polygon."""
 
-    def __init__(self, buffer: float):
+    def __init__(self, buffer: float) -> None:
+        """Initialise PointOverlay instance."""
         super().__init__()
         self.buffer = buffer
 
     def distribution(
-        self,
-        trajectory: Trajectory,
-        environment: Environment,
-        bounds: tuple[float, float, float, float] | None = None,
+            self,
+            trajectory: "Trajectory",
+            environment: "Environment",
+            bounds: tuple[float, float, float, float] | None = None,
     ) -> gpd.GeoDataFrame:
         """Computes density by counting trajectory points within each polygon.
 
         Args:
             trajectory: Source of observed positions and times.
+            environment: Spatiotemporal exposure environment.
             bounds: Optional spatial bounds to restrict evaluation.
 
         Returns:
@@ -36,7 +49,7 @@ class PointOverlay(Mobility):
         """
         data = self._get_mobility_data(trajectory, environment, bounds, self.buffer)
 
-        x, y, t, dt = data.x, data.y, data.t, data.dt
+        x, y = data.x, data.y
         mask = data.mask
         if len(x) == 0 or not np.any(mask):
             return data.zero_density_gdf
@@ -53,8 +66,8 @@ class PointOverlay(Mobility):
         joined = gpd.sjoin(
             trajectory_points,
             environment.gdf_raster.geometry[mask]
-                .reset_index()
-                .rename(columns={"index": "geometry_index"}),
+            .reset_index()
+            .rename(columns={"index": "geometry_index"}),
             how="inner",
             predicate="intersects",
         )
@@ -67,7 +80,7 @@ class PointOverlay(Mobility):
 
         return gpd.GeoDataFrame(
             data={
-                "density": density / density.sum(),
+                "density"       : density / density.sum(),
                 "point_geometry": environment.geometry_points,
             },
             geometry=environment.gdf_raster.geometry,

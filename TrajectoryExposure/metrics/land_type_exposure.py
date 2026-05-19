@@ -1,7 +1,11 @@
-"""LandTypeExposure calculates the exposure level between 0.0 and 1.0 to the given land type."""
-import logging
+"""Land cover exposure metric with Gaussian distance decay.
 
-logger = logging.getLogger(__name__)
+Computes a continuous exposure value for each raster cell based on its
+proximity to a specified land cover type. Cells within the target land cover
+receive a maximum exposure value; cells outside decay smoothly with distance
+using a Gaussian profile, reaching zero beyond a specified radius.
+"""
+import logging
 
 import geopandas as gpd
 import numpy as np
@@ -11,9 +15,29 @@ from shapely.errors import GeometryTypeError
 from .base import Metric
 from .proximity import Proximity
 
+logger = logging.getLogger(__name__)
 
 class LandTypeExposure(Metric):
-    """LandTypeExposure calculates the exposure level to the given land type."""
+    """Spatial metric computing proximity-weighted exposure to a land cover type.
+
+    For each raster cell, exposure is ``1.0`` inside the target land cover and
+    decays smoothly with distance outside it, reaching ``0.0`` beyond ``radius``.
+    The decay profile is Gaussian with the radius corresponding to approximately
+    three standard deviations.
+
+    If ``column`` and ``value`` are both ``None``, all geometries in the input
+    are treated as the target land cover.
+
+    Attributes:
+        radius: Influence radius in CRS units beyond which exposure is zero.
+        column: Column in the input GeoDataFrame used to filter land cover categories.
+            ``None`` if all geometries are used.
+        value: Category value within ``column`` identifying the target land cover.
+            ``None`` if all geometries are used.
+        min_inside: Minimum exposure value assigned to cells within the target
+            land cover. Defaults to ``1.0``.
+        name: Metric name derived from the title, column, value, and radius.
+    """
     metric_title = "land_type_exposure"
 
     def __init__(
@@ -23,7 +47,22 @@ class LandTypeExposure(Metric):
             value: str | float | int | None = None,
             min_inside: float = 1.0,
     ) -> None:
-        """Initialise a LandTypeExposure metric with a proximity effect."""
+        """Initialise a LandTypeExposure metric.
+
+        Args:
+            radius: Influence radius in CRS units. Exposure decays to zero at this
+                distance from the target land cover boundary.
+            column: Column in the input GeoDataFrame identifying land cover categories.
+                Must be set together with ``value``, or both must be ``None``.
+            value: Category value within ``column`` identifying the target land cover.
+                Must be set together with ``column``, or both must be ``None``.
+            min_inside: Minimum exposure value for cells within the target land cover.
+                Defaults to ``1.0``.
+
+        Raises:
+            ValueError: If ``radius`` is negative.
+            ValueError: If exactly one of ``column`` and ``value`` is ``None``.
+        """
         super().__init__()
         if radius < 0.0:
             raise ValueError("radius must be >= 0")
@@ -44,6 +83,28 @@ class LandTypeExposure(Metric):
             gdf_input: gpd.GeoDataFrame,
             gdf_raster: gpd.GeoDataFrame,
     ) -> pd.Series:
+        """Compute proximity-weighted land cover exposure for each raster cell.
+
+        Determines which raster cells lie within the target land cover geometry,
+        then applies a Gaussian distance decay to cells outside it via
+        :func:`add_distance_decay`.
+
+        Polygon and MultiPolygon geometries use exact containment; LineString and
+        MultiLineString geometries treat cells within half a cell diagonal as inside.
+
+        Args:
+            gdf_input: Land cover polygons or lines used to determine the target area.
+            gdf_raster: Raster grid defining the evaluation cells. Must contain
+                ``cx`` and ``cy`` columns for cell centroids.
+
+        Returns:
+            Series of exposure values in the range ``[0.0, 1.0]``, one per row
+            in ``gdf_raster``.
+
+        Raises:
+            GeometryTypeError: If the target geometry type is not polygon- or
+                line-like.
+        """
         proximity_metric = Proximity(self.column, self.value)
         distances = proximity_metric.calculate(gdf_input, gdf_raster)
 
@@ -111,7 +172,8 @@ def add_distance_decay(
     Returns:
         A copy of `gdf` with a new column `<column>_blurred_<radius>`.
     """
-    from scipy.ndimage import distance_transform_edt  # import deferred for speedup
+    # import deferred for speedup
+    from scipy.ndimage import distance_transform_edt  # noqa: PLC0415
 
     gdf = gdf.copy()
     if "cx" not in gdf.columns or "cy" not in gdf.columns:

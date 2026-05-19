@@ -1,12 +1,21 @@
+"""Adaptive uncertainty mobility model using time-integrated 2D Gaussian densities.
+
+:class:`AdaptiveUncertainty` models positional uncertainty as a Gaussian that
+grows with the time elapsed since the nearest observation, reflecting the
+increasing probability of deviation from the recorded path. The density field
+is integrated over the trajectory time range using trapezoidal quadrature.
+"""
+
 import datetime as dt
 import logging
+import typing
 
 import geopandas as gpd
 import numpy as np
 
 from TrajectoryExposure.core.environment import Environment
 from TrajectoryExposure.data.trajectory import Trajectory
-from TrajectoryExposure.mobility.base import Mobility
+from TrajectoryExposure.mobility.base import Mobility, MobilityData
 
 logger = logging.getLogger(__name__)
 
@@ -14,6 +23,7 @@ logger = logging.getLogger(__name__)
 class AdaptiveUncertainty(Mobility):
     """Time-integrated 2D Gaussian density field from observed positions."""
 
+    @typing.override
     def __init__(
             self,
             sigma0: float,
@@ -49,13 +59,14 @@ class AdaptiveUncertainty(Mobility):
             time_values: np.ndarray,
     ) -> tuple[float, float]:
         """Linear interpolation of position along the observed path at time t.
+
         Outside the observed range, returns the nearest endpoint.
 
         Args:
-            t:
-            x_values:
-            y_values:
-            time_values:
+            t: current evaluation time
+            x_values: x-position observations in trajectory
+            y_values: y-position observations in trajectory
+            time_values: time observations in trajectory
 
         Returns:
             tuple(x, y): mean x and y coordinates
@@ -97,27 +108,23 @@ class AdaptiveUncertainty(Mobility):
     def _instantaneous_density(
             self,
             t: dt.datetime,
-            x_values: np.ndarray,
-            y_values: np.ndarray,
-            time_values: np.ndarray,
             eval_x: np.ndarray,
             eval_y: np.ndarray,
-    ) -> np.ndarray:
+            data: MobilityData
+            ) -> np.ndarray:
         """Evaluate instantaneous 2D density at the provided coordinates.
 
         Args:
             t: Time at which to evaluate the density.
-            x_values: Observed x coordinates.
-            y_values: Observed y coordinates.
-            time_values: Observation times aligned with x/y arrays.
             eval_x: 1D x coordinates of evaluation points.
             eval_y: 1D y coordinates of evaluation points.
+            data: observed data in Trajectory
 
         Returns:
             1D array of density values, one per evaluation point.
         """
-        mu_x, mu_y = self._mean_position(t, x_values, y_values, time_values)
-        dt_eff = self._delta_t_eff(t, time_values)
+        mu_x, mu_y = self._mean_position(t, data.x, data.y, data.t)
+        dt_eff = self._delta_t_eff(t, data.t)
 
         sigma2 = self.sigma0 ** 2 + (self.v * dt_eff / self.k) ** 2
         sigma2 = max(sigma2, self.eps)
@@ -144,11 +151,11 @@ class AdaptiveUncertainty(Mobility):
             GeoDataFrame containing a ``density`` column aligned to the
             environment raster geometry.
         """
-        standard_deviations = 3
+        # TODO: fix definition of buffer
         buffer = 1000  # self.sigma0 * standard_deviations
         data = self._get_mobility_data(trajectory, environment, bounds, buffer)
 
-        x, y, t, dt_seconds = data.x, data.y, data.t, data.dt
+        x, t, dt_seconds = data.x, data.t, data.dt
         mask = data.mask
         if len(x) == 0 or not np.any(mask):
             return data.zero_density_gdf
@@ -171,8 +178,8 @@ class AdaptiveUncertainty(Mobility):
         for step in range(num_steps - 1):
             t0, t1 = times[step], times[step + 1]
             dt_seconds = (t1 - t0) / np.timedelta64(1, "s")
-            z0 = self._instantaneous_density(t0, x, y, t, eval_x, eval_y)
-            z1 = self._instantaneous_density(t1, x, y, t, eval_x, eval_y)
+            z0 = self._instantaneous_density(t0, eval_x, eval_y, data)
+            z1 = self._instantaneous_density(t1, eval_x, eval_y, data)
             density[mask] += 0.5 * (z0 + z1) * dt_seconds  # trapezoidal integration
 
         return gpd.GeoDataFrame(

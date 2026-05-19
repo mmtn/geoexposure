@@ -34,12 +34,14 @@ include = ["core*", "data*", "metrics*", "exposure*", "mobility*"]
 [tool.ruff]
 #extend-include = ["*.ipynb"]  # To include Jupyter notebooks into checking
 fix = true
-line-length = 99            # same as black
+line-length = 99  # same as black
 show-fixes = true
 
 
 [tool.ruff.lint]
+
 allowed-confusables = ["⨯", "α", "β", "γ", "σ"]
+
 select = [
     "A", # builtins
     "ANN", # annotations
@@ -78,7 +80,10 @@ ignore = [
     "ANN002",  # Missing type annotation for *args
     "ANN003",  # Missing type annotation for **kwargs
 ]
-fixable = ["ALL"] # Autofix for all safe enabled rules when `--fix` is provided.
+
+# autofix for all safe enabled rules when `--fix` is provided.
+fixable = ["ALL"]
+
 unfixable = []
 
 # exclude the following patterns from linting
@@ -88,18 +93,13 @@ exclude = [
     "__pycache__",
     ".cache",
     "data",
-    "tests",
+#    "test*",
 ]
 
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
 
+
 [tool.ruff.lint.per-file-ignores]
-#"__init__.py" = ["F401"]
-#"*.ipynb" = ["ERA001"]
-"core/cachable.py" = [
-    "ANN401",
-    "S301",
-    "S324",
-]
+"core/cachable.py" = ["ANN401"]

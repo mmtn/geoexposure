@@ -1,9 +1,17 @@
-"""Module docstring: representation of geospatial environmental data including metrics."""
+"""Geospatial data representation and metric computation for exposure modelling.
+
+:class:`SpatialData` wraps a vector dataset loaded from disk and associates it
+with a set of :class:`~metrics.base.Metric` objects that are evaluated on a
+raster grid. Instances can be interpolated between two states to support
+temporally varying spatial data within :class:`~data.temporal.TemporalData`.
+"""
+
 import logging
 from collections.abc import Mapping
-from copy import copy as shallow_copy, deepcopy
+from copy import copy as shallow_copy
+from copy import deepcopy
 from os import PathLike
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from ..metrics import Metric

@@ -3,10 +3,10 @@
 
 import hashlib
 import logging
-import os
 import pickle
 from _hashlib import HASH
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
 import geopandas as gpd
@@ -44,7 +44,8 @@ class Cachable:
         Returns:
             Hex digest string uniquely identifying the input combination.
         """
-        hasher = hashlib.md5()
+        # MD5 is acceptable for disk caching, not security related
+        hasher = hashlib.md5()  # noqa: S324
 
         for arg in args:
             if isinstance(arg, gpd.GeoDataFrame):
@@ -94,7 +95,7 @@ class Cachable:
 
         return hasher
 
-    def _cache_path(self, key: str, label: str = "cache") -> str:
+    def _cache_path(self, key: str, label: str = "cache") -> Path:
         """Constructs the full file path for a cache entry.
 
         Args:
@@ -104,8 +105,9 @@ class Cachable:
         Returns:
             Full path to the cache file.
         """
-        os.makedirs(self.cache_dir, exist_ok=True)
-        return os.path.join(self.cache_dir, f"{label}_{key}.pkl")
+        cache_dir = Path(self.cache_dir)
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        return cache_dir / f"{label}_{key}.pkl"
 
     def _save_to_cache(self, obj: Any, key: str, label: str = "cache") -> None:
         """Serialises and saves an object to disk.
@@ -115,8 +117,9 @@ class Cachable:
             key: Hash key identifying the cache entry.
             label: Human-readable label prepended to the filename.
         """
+        # TODO: file lock before parallelisation to prevent issues
         path = self._cache_path(key, label)
-        with open(path, "wb") as f:
+        with path.open("wb") as f:
             pickle.dump(obj, f)
 
     def _load_from_cache(self, key: str, label: str = "cache") -> Any | None:
@@ -130,10 +133,20 @@ class Cachable:
             The deserialised object if the cache entry exists, else None.
         """
         path = self._cache_path(key, label)
-        if os.path.exists(path):
-            with open(path, "rb") as f:
-                return pickle.load(f)
-        return None
+        if not path.exists():
+            return None
+
+        try:
+            with path.open("rb") as f:
+                return pickle.load(f)  # noqa: S301
+        except (NotImplementedError, pickle.UnpicklingError, AttributeError, TypeError) as e:
+            logger.warning(
+                "Cache file '%s' could not be loaded and will be deleted: %s",
+                path, e,
+            )
+            path.unlink()
+            return None
+
 
     def _get_or_compute(
         self,

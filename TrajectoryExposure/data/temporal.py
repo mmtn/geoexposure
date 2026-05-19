@@ -1,27 +1,21 @@
 """Time-indexed values sampled with nearest or interpolation."""
-import logging
-
-logger = logging.getLogger(__name__)
 
 import datetime as dt
+import logging
 from collections.abc import Mapping
-from enum import Enum
 from typing import SupportsFloat
 
 import numpy as np
 import pandas as pd
 
-from ..core.enums import SamplingMethod
+from ..core.enums import SamplingMethod, TemporalType
 from ..core.utils import check_iter_types, get_cyclic_timestamp, match_datetime_in_list
 from .spatial import SpatialData
 
+logger = logging.getLogger(__name__)
+
 type DateTimeLike = dt.time | dt.date | dt.datetime | pd.Timestamp
 type TimeDeltaLike = dt.timedelta | pd.Timedelta
-
-
-class TemporalType(Enum):
-    CYCLIC = 0
-    DATED = 1
 
 
 class TemporalData:
@@ -32,8 +26,8 @@ class TemporalData:
     def __init__(
             self,
             time_data_dict: Mapping[DateTimeLike, SpatialData | SupportsFloat],
+            temporal_type: TemporalType,
             temporal_resolution: TimeDeltaLike | None = None,
-            temporal_type: TemporalType | None = None,
             cycle_duration: TimeDeltaLike | None = None,
     ) -> None:
         """Initialise a TemporalData instance.
@@ -63,12 +57,12 @@ class TemporalData:
         self._arg_check()
 
     @property
-    def min_time(self) -> np.ndarray:
+    def min_time(self) -> DateTimeLike:
         """Return the earliest time in the internal dict."""
         return np.array(list(self._dict.keys())).min()
 
     @property
-    def max_time(self) -> np.ndarray:
+    def max_time(self) -> DateTimeLike:
         """Return the latest time in the internal dict."""
         return np.array(list(self._dict.keys())).max()
 

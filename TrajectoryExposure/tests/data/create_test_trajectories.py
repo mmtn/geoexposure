@@ -20,7 +20,7 @@ import datetime as dt
 import numpy as np
 import pandas as pd
 
-from TrajectoryExposure.data.trajectory import DATETIME, X, Y
+from TrajectoryExposure.data.columns import DATETIME, X, Y
 
 
 def get_xyt(start_time, end_time, frequency, movement_speed, max_x_value, max_entries=1e6):

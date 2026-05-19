@@ -1,7 +1,12 @@
-"""Proximity metric: distance from each raster centroid to the chosen geometries."""
-import logging
+"""Proximity metric computing distances from raster cell centroids to target geometries.
 
-logger = logging.getLogger(__name__)
+For each cell in a raster grid, the proximity metric returns the distance from
+the cell centroid to the nearest edge of a specified set of input geometries.
+An optional column and value filter can be used to restrict the target
+geometries to a particular land cover category.
+"""
+
+import logging
 
 import geopandas as gpd
 import pandas as pd
@@ -9,9 +14,23 @@ import pandas as pd
 from ..core.utils import get_gdf_centroids
 from .base import Metric
 
+logger = logging.getLogger(__name__)
 
 class Proximity(Metric):
-    """Proximity metric: distance from each raster centroid to the chosen geometries."""
+    """Spatial metric computing the distance from each raster cell to target geometries.
+
+    Distances are measured from raster cell centroids to the nearest edge of the
+    target geometry. If ``column`` and ``value`` are provided, only geometries
+    matching that category are used as the target; otherwise all input geometries
+    are used.
+
+    Attributes:
+        column: Column in the input GeoDataFrame used to filter target geometries.
+            ``None`` if all geometries are used.
+        value: Category value within ``column`` identifying the target geometries.
+            ``None`` if all geometries are used.
+        name: Metric name derived from the title, column, and value.
+    """
     metric_title = "proximity"
 
     def __init__(
@@ -19,7 +38,17 @@ class Proximity(Metric):
             column: str | None = None,
             value: int | float | None = None,
     ) -> None:
-        """Initialise a Proximity metric with optional arguments to filter the input data."""
+        """Initialise a Proximity metric.
+
+        Args:
+            column: Column in the input GeoDataFrame identifying land cover categories.
+                Must be set together with ``value``, or both must be ``None``.
+            value: Category value within ``column`` identifying the target geometries.
+                Must be set together with ``column``, or both must be ``None``.
+
+        Raises:
+            ValueError: If exactly one of ``column`` and ``value`` is ``None``.
+        """
         super().__init__()
         if (column is None) ^ (value is None):
             raise ValueError("Both 'column' and 'value' must be set, or both must be None.")
@@ -66,7 +95,24 @@ class Proximity(Metric):
 
 
 def calculate_gdf_proximity(gdf_from: gpd.GeoDataFrame, gdf_to: gpd.GeoDataFrame) -> list[float]:
-    """Compute nearest distance from each geometry in ``gdf_from`` to ``gdf_to``."""
+    """Compute the nearest distance from each geometry in ``gdf_from`` to ``gdf_to``.
+
+    Polygon and MultiPolygon geometries in ``gdf_from`` are converted to their
+    centroids before distance calculation. Where multiple geometries in ``gdf_to``
+    are equidistant from a source point, the minimum distance is used.
+
+    Args:
+        gdf_from: GeoDataFrame of source geometries. Polygons are reduced to
+            centroids; Point geometries are used directly.
+        gdf_to: GeoDataFrame of target geometries to measure distance to.
+
+    Returns:
+        List of nearest distances, one per row in ``gdf_from``, in CRS units.
+
+    Raises:
+        TypeError: If either input is not a GeoDataFrame with a geometry column.
+        ValueError: If ``gdf_from`` geometries are not Points or Polygons.
+    """
     if not isinstance(gdf_from, gpd.GeoDataFrame) or not isinstance(gdf_to, gpd.GeoDataFrame):
         raise TypeError("Inputs must be GeoDataFrames with a 'geometry' column")
 

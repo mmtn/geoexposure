@@ -1,31 +1,65 @@
+"""Exposure model combining mobility and environment to estimate environmental exposure.
+
+:class:`Exposure` integrates a :class:`~TrajectoryExposure.Mobility` model with an
+:class:`~TrajectoryExposure.Environment` to compute time-windowed exposure estimates
+for one or more :class:`~TrajectoryExposure.Trajectory` instances. Results are
+returned as :class:`~TrajectoryExposure.exposure.results.ExposureSeries` objects
+which can be aggregated, scaled, and summarised.
+"""
+
 import datetime as dt
 import logging
-from typing import Sequence
+from collections.abc import Sequence
 
 import pandas as pd
 
-from TrajectoryExposure import Environment, Mobility, SamplingMethod, Trajectory
-from TrajectoryExposure.core import utils
-from TrajectoryExposure.data.trajectory import DATETIME
-from TrajectoryExposure.exposure.results import ExposureSeries
+from ..core import utils
+from ..core.environment import Environment
+from ..data.columns import DATETIME
+from ..data.resampling import SamplingMethod
+from ..data.trajectory import Trajectory
+from ..exposure.results import ExposureSeries
+from ..mobility.base import Mobility
 
 logger = logging.getLogger(__name__)
 
 
 class Exposure:
+    """Combines a mobility model and environment to compute exposure estimates.
+
+    Exposure is calculated by dividing each trajectory into time windows,
+    computing the occupancy distribution within each window using the mobility
+    model, and integrating it against the environmental exposure sources.
+
+    Attributes:
+        mobility: Mobility model used to compute occupancy distributions.
+        environment: Environment defining the spatial and temporal exposure sources.
+        timestep: Default time window size. If ``None``, resolved from the
+            environment's temporal resolution.
+        interp_method: Sampling method used when querying the environment at
+            window centre times.
+    """
+
     def __init__(
-        self,
-        mobility: Mobility,
-        environment: Environment,
-        *,
-        timestep: dt.timedelta | None = None,
-        interp_method: SamplingMethod = SamplingMethod.INTERP,
+            self,
+            mobility: Mobility,
+            environment: Environment,
+            *,
+            timestep: dt.timedelta | None = None,
+            interp_method: SamplingMethod = SamplingMethod.INTERP,
     ) -> None:
-        """Args:
-        mobility:
-        environment:
-        timestep:
-        interp_method: "interp", "nearest"
+        """Initialise an Exposure model.
+
+        Args:
+            mobility: Mobility model used to compute occupancy distributions from
+                trajectory data.
+            environment: Environment defining the spatial and temporal exposure
+                sources over the study area.
+            timestep: Default time window size for exposure calculations. If
+                ``None``, the resolution is inferred from the environment or
+                supplied per call.
+            interp_method: Method used to sample the environment at each window
+                centre time. Defaults to :attr:`~SamplingMethod.INTERP`.
         """
         self.mobility = mobility
         self.environment = environment
@@ -33,23 +67,32 @@ class Exposure:
         self.interp_method = interp_method
 
     def for_trajectory(
-        self,
-        trajectory: Trajectory,
-        *,
-        start_time: dt.datetime | None = None,
-        end_time: dt.datetime | None = None,
-        timestep: dt.timedelta | None = None,
+            self,
+            trajectory: Trajectory,
+            *,
+            start_time: dt.datetime | None = None,
+            end_time: dt.datetime | None = None,
+            timestep: dt.timedelta | None = None,
     ) -> ExposureSeries:
-        """
+        """Compute time-windowed exposure for a single trajectory.
+
+        Divides the trajectory into windows of the effective temporal resolution,
+        computes the occupancy distribution and environmental exposure within each
+        window, and returns the results as an :class:`ExposureSeries`. If
+        ``timestep`` is coarser than the effective resolution, the series is
+        aggregated before being returned.
 
         Args:
-            trajectory:
-            start_time:
-            end_time:
-            timestep:
+            trajectory: Input trajectory providing observed positions and times.
+            start_time: Start of the exposure calculation window. Defaults to the
+                trajectory start time.
+            end_time: End of the exposure calculation window. Defaults to the
+                trajectory end time.
+            timestep: Time window size for this call. Overrides the instance-level
+                ``timestep`` and the environment's temporal resolution if provided.
 
         Returns:
-
+            An :class:`ExposureSeries` containing one row per time window.
         """
         if not self.environment.calculated:
             self.environment.calculate()
@@ -66,21 +109,25 @@ class Exposure:
         return series
 
     def for_trajectories(
-        self,
-        trajectories: Sequence[Trajectory],
-        *,
-        temporal_resolution: dt.timedelta | None = None,
+            self,
+            trajectories: Sequence[Trajectory],
+            *,
+            temporal_resolution: dt.timedelta | None = None,
     ) -> Sequence[ExposureSeries]:
-        """
+        """Compute time-windowed exposure for a sequence of trajectories.
+
+        Calls :meth:`for_trajectory` for each trajectory in the sequence and
+        returns the results in the same order.
 
         Args:
-            trajectories:
-            temporal_resolution:
+            trajectories: Sequence of trajectories to compute exposure for.
+            temporal_resolution: Time window size applied to all trajectories.
+                If ``None``, resolved from the instance or environment.
 
         Returns:
-
+            Sequence of :class:`ExposureSeries` objects, one per trajectory.
         """
-        # TODO: add progress bar or logging here
+        # TODO: replace with parallel calculation over Scenarios...
         return [
             self.for_trajectory(
                 trajectory=trajectory,
@@ -89,127 +136,34 @@ class Exposure:
             for trajectory in trajectories
         ]
 
-    def sums(
-        self,
-        inputs: Sequence[Trajectory] | Sequence[ExposureSeries],
-        *,
-        temporal_resolution: dt.timedelta | None = None,
-        per_second: bool = True,
-        apply_scaling: bool = False,
-    ) -> pd.DataFrame:
-        """Compute exposure sums from either trajectories or precomputed exposure series."""
-        if not inputs:
-            return pd.DataFrame()
-
-        first = inputs[0]
-
-        if isinstance(first, Trajectory):
-            return self._sums_trajectory_list(
-                inputs,
-                temporal_resolution=temporal_resolution,
-                per_second=per_second,
-                apply_scaling=apply_scaling,
-            )
-
-        if isinstance(first, ExposureSeries):
-            if temporal_resolution is not None:
-                raise ValueError(
-                    "`temporal_resolution` is not applicable when passing "
-                    "precomputed ExposureSeries objects."
-                )
-            return self._sums_exposure_series_list(
-                inputs,
-                per_second=per_second,
-                apply_scaling=apply_scaling,
-            )
-
-        raise TypeError(
-            f"Unsupported input type '{type(first).__name__}'. "
-            "Expected a list of Trajectory or ExposureSeries objects."
-        )
-
-    def _sums_trajectory_list(
-        self,
-        trajectories: list[Trajectory],
-        *,
-        temporal_resolution: dt.timedelta | None = None,
-        per_second: bool = True,
-        apply_scaling: bool = False,
-    ) -> pd.DataFrame:
-        """
-
-        Args:
-            trajectories:
-            temporal_resolution:
-            per_second:
-            apply_scaling:
-
-        Returns:
-
-        """
-        exposure_series_list = self.for_trajectories(
-            trajectories, temporal_resolution=temporal_resolution
-        )
-        return self._sums_exposure_series_list(
-            exposure_series_list,
-            per_second=per_second,
-            apply_scaling=apply_scaling,
-        )
-
-    def _sums_exposure_series_list(
-        self,
-        exposure_series_list: list[ExposureSeries],
-        *,
-        per_second: bool = True,
-        apply_scaling: bool = False,
-    ) -> pd.DataFrame:
-        """
-
-        Args:
-            exposure_series_list:
-            per_second:
-            apply_scaling:
-
-        Returns:
-
-        """
-        results = []
-
-        for series in exposure_series_list:
-            if per_second:
-                series = series.per_second()
-            if apply_scaling:
-                series = series.scaled()
-
-            exposure_sum = series.mean()
-
-            if series.source_id is not None:
-                exposure_sum["filename"] = series.source_id
-
-            results.append(exposure_sum)
-
-        return pd.DataFrame(results)
-
     def _calculate_exposure_dataframe(
-        self,
-        trajectory: Trajectory,
-        *,
-        start_time: dt.datetime | None = None,
-        end_time: dt.datetime | None = None,
-        temporal_resolution: dt.timedelta | None = None,
+            self,
+            trajectory: Trajectory,
+            *,
+            start_time: dt.datetime | None = None,
+            end_time: dt.datetime | None = None,
+            temporal_resolution: dt.timedelta | None = None,
     ) -> pd.DataFrame:
-        """
+        """Compute raw exposure integrals over time windows for a single trajectory.
+
+        Divides the time range into windows of ``temporal_resolution``, computes
+        the normalised occupancy distribution within each window using the mobility
+        model, and integrates it against the environmental exposure sources sampled
+        at the window centre time.
 
         Args:
-            trajectory:
-            start_time:
-            end_time:
-            temporal_resolution:
+            trajectory: Input trajectory providing observed positions and times.
+            start_time: Start of the exposure calculation range. Defaults to the
+                trajectory start time.
+            end_time: End of the exposure calculation range. Defaults to the
+                trajectory end time.
+            temporal_resolution: Duration of each calculation window.
 
         Returns:
-
+            DataFrame with one row per window containing raw exposure integrals for
+            each environmental source, plus metadata columns for window start,
+            centre, end, duration, and scaling.
         """
-
         if start_time is None:
             start_time = trajectory.df[DATETIME].min()
         if end_time is None:
@@ -217,8 +171,6 @@ class Exposure:
 
         windows = utils.get_time_windows(start_time, end_time, temporal_resolution)
 
-        ## REFACTOR FROM HERE
-        #
         scaling = []
         durations = []
         centres = []
@@ -227,7 +179,7 @@ class Exposure:
         last_index = len(windows) - 1
         logger.info(
             f"Computing exposure in {len(windows)} windows between {start_time} and {end_time}"
-            f" (temporal resolution: {temporal_resolution})"
+            f" (temporal resolution: {temporal_resolution})",
         )
 
         for ii, (start, end) in enumerate(windows):
@@ -251,7 +203,7 @@ class Exposure:
             extra_cols = [
                 col
                 for col in exposure_sources.columns
-                if col not in self.environment.columns()
+                if col not in self.environment.columns
             ]
             sources_only = exposure_sources.drop(columns=extra_cols)
 
@@ -262,21 +214,19 @@ class Exposure:
             durations.append(duration)
             exposure_data.append(exposure_ii.sum())
 
-        window_starts, window_ends = zip(*windows)
+        window_starts, window_ends = zip(*windows, strict=True)
         summary_df = pd.DataFrame(exposure_data)
         summary_df["scaling"] = scaling
         summary_df["window_start"] = list(window_starts)
         summary_df["window_centre"] = centres
         summary_df["window_end"] = list(window_ends)
         summary_df["window_length_seconds"] = durations
-        #
-        ## END REFACTOR
 
         return summary_df
 
     def _resolve_temporal_resolution(
-        self,
-        timestep: dt.timedelta | None,
+            self,
+            timestep: dt.timedelta | None,
     ) -> dt.timedelta:
         """Resolve effective temporal resolution from argument, Exposure, or Environment."""
         candidates = [
@@ -285,5 +235,4 @@ class Exposure:
             self.environment.temporal_resolution,
         ]
         valid = [r for r in candidates if r is not None]
-        resolved = min(valid) if valid else None
-        return resolved
+        return min(valid) if valid else None

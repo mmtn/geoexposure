@@ -1,21 +1,34 @@
-from abc import ABC, abstractmethod
-from dataclasses import dataclass
+"""Abstract base class and shared data structures for mobility models.
+
+:class:`Mobility` defines the interface that all concrete mobility models must
+implement. The static helper :meth:`~Mobility._get_mobility_data` prepares the
+trajectory arrays and raster evaluation coordinates shared by all
+implementations. :class:`MobilityData` is an immutable data carrier holding
+these prepared arrays.
+"""
+
 import logging
+from abc import ABC, abstractmethod
+from typing import TYPE_CHECKING
 
-logger = logging.getLogger(__name__)
-
+import attrs
 import geopandas as gpd
 import numpy as np
 from shapely import Point
 
-from TrajectoryExposure.data.trajectory import Trajectory
-from TrajectoryExposure.core.environment import Environment
+from ..data.columns import DATETIME, DWELL_TIME_SECONDS, X, Y
 
+if TYPE_CHECKING:
+    from ..core.environment import Environment
+    from ..data.trajectory import Trajectory
+
+logger = logging.getLogger(__name__)
 MAX_NUM_GRID_POINTS = 1e6
 
 
-@dataclass
+@attrs.frozen
 class MobilityData:
+    """Arrays and evaluation coordinates for mobility model computation."""
     x: np.ndarray
     y: np.ndarray
     t: np.ndarray
@@ -27,26 +40,50 @@ class MobilityData:
 
 
 class Mobility(ABC):
-    # TODO: are there issues with few data points at high temporal resolutions?
-    # TODO: normalisation options
+    """Abstract base class for spatial mobility models.
+
+    Subclasses must implement :meth:`distribution`, which transforms a
+    :class:`~..data.trajectory.Trajectory` into a normalised spatial density distribution over the
+    grid defined by an  :class:`~..core.environment.Environment`.
+
+    The static helper :meth:`_get_mobility_data` prepares the arrays and evaluation coordinates
+    shared by all concrete implementations.
+    """
+    # TODO: testing - are there issues with few data points at high temporal resolutions?
 
     @abstractmethod
     def distribution(
-        self,
-        trajectory: Trajectory,
-        environment: Environment,
-        bounds: tuple[float, float, float, float] | None = None,
-    ):
-        """Compute a spatial density distribution for a trajectory."""
-        raise NotImplementedError
+            self,
+            trajectory: "Trajectory",
+            environment: "Environment",
+            bounds: tuple[float, float, float, float] | None = None,
+    ) -> gpd.GeoDataFrame:
+        """Compute a normalised spatial density distribution for a trajectory.
+
+        Subclasses must return a :class:`~geopandas.GeoDataFrame` with the
+        same geometry and CRS as ``environment.gdf_raster``, containing at
+        minimum a ``density`` column whose values sum to 1.
+
+        Args:
+            trajectory: Input trajectory providing observed positions and times.
+            environment: Spatiotemporal environment defining the evaluation grid.
+            bounds: Optional ``(x_min, y_min, x_max, y_max)`` to restrict the
+                region of the grid that is evaluated. If ``None``, bounds are
+                inferred from the trajectory extent.
+
+        Returns:
+            GeoDataFrame with a normalised ``density`` column aligned to the
+            environment raster grid.
+        """
+        ...
 
     @staticmethod
     def _get_mobility_data(
-        trajectory: Trajectory,
-        environment: Environment,
-        bounds: tuple[float, float, float, float] | None,
-        buffer: float,
-    ) -> MobilityData | None:
+            trajectory: "Trajectory",
+            environment: "Environment",
+            bounds: tuple[float, float, float, float] | None,
+            buffer: float,
+    ) -> MobilityData:
         """Prepare cached arrays and evaluation coordinates for mobility models.
 
         Args:
@@ -54,44 +91,37 @@ class Mobility(ABC):
             environment: Environment providing the evaluation grid.
             bounds: Optional (x_min, y_min, x_max, y_max) bounds to limit evaluation.
                 If not provided, computed from the trajectory extent plus buffer.
-            buffer: Padding applied when inferring bounds from the trajectory.
+            buffer: Padding in coordinate units applied when inferring bounds from the trajectory.
 
         Returns:
-            Prepared mobility data, or None if the trajectory has no points.
+            A :class:`MobilityData` instance containing trajectory arrays, the
+            masked subset of grid coordinates to evaluate, and a zero-density
+            GeoDataFrame as a default return value.
+
+        Raises:
+            ValueError: If the number of evaluation coordinates exceeds
+                ``MAX_NUM_GRID_POINTS``.
         """
         # Default to zero density everywhere
         all_x, all_y = environment.centroids_np.transpose()
         zero_density = np.zeros(len(all_x))
         zero_density_gdf = gpd.GeoDataFrame(
             data={
-                "density": zero_density,
+                "density"       : zero_density,
                 "point_geometry": environment.geometry_points,
             },
             geometry=environment.gdf_raster.geometry,
             crs=environment.crs,
         )
 
-        x, y, t, dt = trajectory.get_data_arrays()
-        if len(x) == 0:
-            return MobilityData(
-                x=x,
-                y=y,
-                t=t,
-                dt=dt,
-                eval_coords=np.empty((0, 2), dtype=float),
-                points=environment.geometry_points,
-                mask=np.zeros(len(all_x), dtype=bool),
-                zero_density_gdf=zero_density_gdf,
-            )
+        x = trajectory.df[X].to_numpy(dtype=float)
+        y = trajectory.df[Y].to_numpy(dtype=float)
+        t = trajectory.df[DATETIME].to_numpy(dtype=np.datetime64)
+        dt = trajectory.df[DWELL_TIME_SECONDS].to_numpy(dtype=float)
 
         # Compute bounds from trajectory extent if not provided
         if bounds is None:
-            bounds = (
-                x.min() - buffer,
-                y.min() - buffer,
-                x.max() + buffer,
-                y.max() + buffer,
-            )
+            bounds = (x.min() - buffer, y.min() - buffer, x.max() + buffer, y.max() + buffer)
 
         # Use bounds to get the subset of centroids to evaluate
         x_min, y_min, x_max, y_max = bounds

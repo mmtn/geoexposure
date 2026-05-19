@@ -17,9 +17,9 @@ import geopandas as gpd
 import numpy as np
 import pandas as pd
 
+from ..data.resampling import SamplingMethod
 from ..data.spatial import SpatialData
 from .cachable import Cachable
-from .enums import SamplingMethod
 from .utils import get_gdf_centroids, rasterise
 
 logger = logging.getLogger(__name__)
@@ -179,8 +179,8 @@ class Environment(Cachable):
         spatial = self.get_spatial_exposure()
         temporal = self.get_temporal_exposure(timestamp, method=method)
 
-        # Drop columns to avoid errors in concatenation
-        repeated_columns = ("cx", "cy", "geometry")
+        # Drop columns to avoid errors in concatenation - must be list not tuple for GeoDataFrame
+        repeated_columns = ["cx", "cy", "geometry"]
         spatial.drop(columns=repeated_columns, inplace=True, errors="ignore")
         temporal.drop(columns=repeated_columns, inplace=True, errors="ignore")
 
@@ -217,7 +217,7 @@ class Environment(Cachable):
         """Build the internal raster GeoDataFrame from the spatial reference data."""
         return self._get_or_compute(
             fn=rasterise,
-            args=(self.spatial_reference_data.gdf, self.spatial_resolution),
+            args=(self.spatial_data[self.spatial_reference_data].gdf, self.spatial_resolution),
             label="raster",
         )
 
