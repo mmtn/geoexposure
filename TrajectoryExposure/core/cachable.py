@@ -1,13 +1,17 @@
+"""Mixin providing general-purpose disk caching for any callable result."""
+
+
 import hashlib
 import logging
 import os
 import pickle
+from _hashlib import HASH
 from collections.abc import Callable
 from typing import Any
 
 import geopandas as gpd
 import numpy as np
-from pandas.util import hash_pandas_object
+from geopandas import GeoDataFrame
 
 logger = logging.getLogger(__name__)
 
@@ -43,44 +47,52 @@ class Cachable:
         hasher = hashlib.md5()
 
         for arg in args:
-            # --- Fast path for GeoDataFrame -------------------------------------
             if isinstance(arg, gpd.GeoDataFrame):
-                geom_name = arg.geometry.name
-                geom_wkb = arg[geom_name].to_wkb().to_numpy()
-                geom_wkb_sorted = np.sort(geom_wkb)
-                hasher.update(b"".join(geom_wkb_sorted))
-
-                if arg.crs is not None:
-                    hasher.update(arg.crs.to_wkt().encode())
-
-                # --- Non-geometry columns: unchanged semantics ------------------
-                for col in sorted(arg.columns):
-                    if col == geom_name:
-                        continue
-                    arr = arg[col].to_numpy()
-                    if arr.dtype == object:
-                        # Same behaviour: repr per value, concatenated in row order
-                        hasher.update("".join(repr(v) for v in arr).encode())
-                    else:
-                        hasher.update(arr.tobytes())
-
+                hasher = self._hash_geodataframe(arg, hasher)
             elif isinstance(arg, np.ndarray):
                 hasher.update(arg.tobytes())
-
             elif isinstance(arg, (float, int)):
                 hasher.update(np.array([arg]).tobytes())
-
             elif isinstance(arg, str):
                 hasher.update(arg.encode())
-
             elif isinstance(arg, bool):
                 hasher.update(bytes([arg]))
-
-            else:
-                # Fallback for any other pickleable type
+            else:   # Fallback for any other pickleable type
                 hasher.update(pickle.dumps(arg))
 
         return hasher.hexdigest()
+
+    @staticmethod
+    def _hash_geodataframe(gdf: GeoDataFrame, hasher: HASH) -> HASH:
+        """Add a GeoDataFrame argument to the hasher.
+
+        Args:
+            gdf: GeoDataFrame to add to hash
+            hasher: hash object to update
+
+        Returns:
+            hasher: Updated hash object
+        """
+        geom_name = gdf.geometry.name
+        geom_wkb = gdf[geom_name].to_wkb().to_numpy()
+        geom_wkb_sorted = np.sort(geom_wkb)
+        hasher.update(b"".join(geom_wkb_sorted))
+
+        if gdf.crs is not None:
+            hasher.update(gdf.crs.to_wkt().encode())
+
+        # --- Non-geometry columns: unchanged semantics ------------------
+        for col in sorted(gdf.columns):
+            if col == geom_name:
+                continue
+            arr = gdf[col].to_numpy()
+            if arr.dtype == object:
+                # Same behaviour: repr per value, concatenated in row order
+                hasher.update("".join(repr(v) for v in arr).encode())
+            else:
+                hasher.update(arr.tobytes())
+
+        return hasher
 
     def _cache_path(self, key: str, label: str = "cache") -> str:
         """Constructs the full file path for a cache entry.
@@ -129,6 +141,7 @@ class Cachable:
         args: tuple,
         hash_args: tuple = (),
         label: str = "cache",
+        *,
         verbose: bool = True,
     ) -> Any:
         """Returns a cached result if available, otherwise computes and caches it.
@@ -136,7 +149,9 @@ class Cachable:
         Args:
             fn: Callable to invoke if no cached result is found.
             args: Tuple of arguments passed both to fn and to the hasher.
+            hash_args: Tuple of additional args used to make the hash.
             label: Human-readable label for the cache file.
+            verbose: Whether to log activity in this method.
 
         Returns:
             The cached or freshly computed result.

@@ -1,18 +1,28 @@
-import datetime as dt
-import logging
+"""Environment class combining spatial and temporal exposure data on a raster grid."""
 
-logger = logging.getLogger(__name__)
+from __future__ import annotations
+
+import logging
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    import datetime as dt
+    from collections.abc import Sequence
+
+    from matplotlib.axes import Axes
+
+    from ..data.temporal import TemporalData
 
 import geopandas as gpd
 import numpy as np
 import pandas as pd
 
 from ..data.spatial import SpatialData
-from ..data.temporal import TemporalData
 from .cachable import Cachable
 from .enums import SamplingMethod
 from .utils import get_gdf_centroids, rasterise
 
+logger = logging.getLogger(__name__)
 
 class Environment(Cachable):
     """Spatial/temporal exposure sources sampled on a fixed raster."""
@@ -21,24 +31,38 @@ class Environment(Cachable):
     cache_dir = ".cache/environment"
 
     def __init__(
-        self,
-        spatial_resolution: int | float,
-        spatial_data: dict[str, SpatialData] | None = None,
-        temporal_data: dict[str, TemporalData] | None = None,
-        spatial_reference_data: SpatialData | None = None,
-    ):
-        self.spatial_data = spatial_data if spatial_data is not None else {}
-        self.temporal_data = temporal_data if temporal_data is not None else None
+            self,
+            spatial_resolution: int | float,
+            spatial_data: dict[str, SpatialData],
+            spatial_reference_data: str,
+            temporal_data: dict[str, TemporalData] | None = None
+        ) -> None:
+        """Initialise an Environment from spatial and/or temporal data sources.
+
+        Args:
+            spatial_resolution: Edge length of each raster cell in CRS units (metres).
+            spatial_data: Named spatial datasets to include in the environment.
+            spatial_reference_data: Key from spatial data dict used to select the spatial
+                raster extent and to test whether trajectories lie within the domain.
+            temporal_data: Optional named temporal datasets to include in the environment.
+        """
         self.spatial_resolution = spatial_resolution
+        self.spatial_data = spatial_data
         self.spatial_reference_data = spatial_reference_data
+        self.temporal_data = temporal_data if temporal_data is not None else None
+
         self.gdf_raster = self._calculate_raster()
         self.geometry_points, self.centroids_np = get_gdf_centroids(self.gdf_raster)
-        # self.geometry_polygons = self.gdf_raster.geometry
         self.crs = self.gdf_raster.crs
         self.calculated = False
-        self._set_temporal_resolution()
+
+        self.temporal_resolution = (
+            None if self.temporal_data is None
+            else np.min(data.temporal_resolution for data in self.temporal_data.values())
+        )
 
     def __str__(self) -> str:
+        """Return a human-readable summary of the Environment."""
         spatial = ""
         for name, data in self.spatial_data.items():
             spatial += f"{name}\n"
@@ -64,14 +88,14 @@ class Environment(Cachable):
         if self.calculated:
             return
 
-        for name, data in self.spatial_data.items():
-            data.calculate(self.gdf_raster.copy())
+        for spatial in self.spatial_data.values():
+            spatial.calculate(self.gdf_raster.copy())
 
         if self.temporal_data is None:
             self.calculated = True
             return
 
-        for name, temporal in self.temporal_data.items():
+        for temporal in self.temporal_data.values():
             if temporal.data_type is not SpatialData:
                 continue
             for spatial in temporal.data:
@@ -79,31 +103,46 @@ class Environment(Cachable):
 
         self.calculated = True
 
-    def columns(self) -> list[str]:
+    @property
+    def columns(self) -> Sequence[str]:
         """Return column names produced by `sample()` (excluding geometry)."""
         temporal_data = self.temporal_data if self.temporal_data is not None else {}
         columns: list[str] = []
 
-        for key, spatial in self.spatial_data.items():
-            for metric, weight in spatial.metrics.items():
-                columns.append(f"{key}_{metric.name}")
+        columns.extend(
+            f"{key}_{metric.name}"
+            for key, spatial in self.spatial_data.items()
+            for metric in spatial.metrics.keys()
+        )
 
-        for key, temporal in temporal_data.items():
-            columns.append(f"temporal_{key}")
+        columns.extend(
+            f"temporal_{key}"
+            for key in temporal_data.keys()
+        )
 
         return columns
 
     def get_spatial_exposure(self) -> gpd.GeoDataFrame:
+        """Return the raster GeoDataFrame with static spatial exposure columns."""
         spatial_total = self.gdf_raster.copy()
         for key, spatial in self.spatial_data.items():
-            for metric, weight in spatial.metrics.items():
+            for metric in spatial.metrics.keys():
                 col = f"{key}_{metric.name}"
                 spatial_total[col] = spatial.gdf_metrics[metric.name]
-        return spatial_total # .drop(columns=["geometry"])
+        return spatial_total
 
     def get_temporal_exposure(
-        self, timestamp: dt.datetime, method: str = "nearest"
+        self, timestamp: dt.datetime, method: SamplingMethod = SamplingMethod.NEAREST
     ) -> gpd.GeoDataFrame:
+        """Return the raster GeoDataFrame with temporal exposure columns at the given time.
+
+        Args:
+            timestamp: The datetime at which to sample temporal data.
+            method: Sampling strategy; see :class:`~core.enums.SamplingMethod`.
+
+        Returns:
+            GeoDataFrame with one row per raster cell and one column per temporal layer.
+        """
         temporal_total = self.gdf_raster.copy()
         temporal_data = self.temporal_data if self.temporal_data is not None else {}
 
@@ -117,31 +156,52 @@ class Environment(Cachable):
             else:
                 raise TypeError("unknown data type")
 
-        return temporal_total.drop(columns=["geometry"])
+        return temporal_total
 
-    def sample(self, timestamp: dt.datetime, method: str = "nearest") -> gpd.GeoDataFrame:
+    def sample(
+        self, timestamp: dt.datetime, method:  SamplingMethod = SamplingMethod.NEAREST
+    ) -> gpd.GeoDataFrame:
+        """Return the full raster GeoDataFrame with all exposure columns at the given time.
+
+        Combines static spatial columns with temporal columns sampled at ``timestamp``.
+
+        Args:
+            timestamp: The datetime at which to sample temporal data.
+            method: Sampling strategy; see :class:`~core.enums.SamplingMethod`.
+
+        Returns:
+            GeoDataFrame with one row per raster cell and columns for every layer.
+        """
         if not self.calculated:
             print("run 'calculate()' before 'sample()'")
 
-        repeated_columns = ("cx", "cy", "geometry")
         gdf_sample = self.gdf_raster.copy()
         spatial = self.get_spatial_exposure()
         temporal = self.get_temporal_exposure(timestamp, method=method)
 
-        [spatial.drop(columns=[col], inplace=True) for col in repeated_columns if col in spatial.columns]
-        [temporal.drop(columns=[col], inplace=True) for col in repeated_columns if col in temporal.columns]
+        # Drop columns to avoid errors in concatenation
+        repeated_columns = ("cx", "cy", "geometry")
+        spatial.drop(columns=repeated_columns, inplace=True, errors="ignore")
+        temporal.drop(columns=repeated_columns, inplace=True, errors="ignore")
 
-        merged = gpd.GeoDataFrame(
+        return gpd.GeoDataFrame(
             pd.concat([gdf_sample, spatial, temporal], axis=1),
             geometry="geometry",
             crs=gdf_sample.crs,
         )
 
-        return merged
-
-    def scaling_at_datetime(
+    def scaling_at_timestamp(
         self, timestamp: dt.datetime, method: SamplingMethod = SamplingMethod.NEAREST
     ) -> float:
+        """Return the scalar temporal scaling factor at the given datetime.
+
+        Args:
+            timestamp: The datetime at which to evaluate the scaling.
+            method: Sampling strategy; see :class:`~core.enums.SamplingMethod`.
+
+        Returns:
+            Scalar multiplier to apply to exposure values at ``timestamp``.
+        """
         if self.temporal_data is None:
             return 1.0
         if all(d.data_type is SpatialData for d in self.temporal_data.values()):
@@ -153,33 +213,39 @@ class Environment(Cachable):
         ]
         return np.prod(scaling_factors)
 
-    def _calculate_raster(self):
+    def _calculate_raster(self) -> gpd.GeoDataFrame:
+        """Build the internal raster GeoDataFrame from the spatial reference data."""
         return self._get_or_compute(
             fn=rasterise,
             args=(self.spatial_reference_data.gdf, self.spatial_resolution),
             label="raster",
         )
 
-    def _set_temporal_resolution(self):
-        if self.temporal_data is None:
-            self.temporal_resolution = None
-        else:
-            self.temporal_resolution = np.min(
-                [data.temporal_resolution for data in self.temporal_data.values()]
-            )
-
     def plot_exposure(
-        self, datetime: dt.datetime | None = None, method: str = "nearest", **kwargs
-    ):
+        self,
+        timestamp: dt.datetime | None = None,
+        *,
+        method: SamplingMethod = SamplingMethod.NEAREST,
+        **kwargs,
+    ) -> Axes:
+        """Plot the exposure raster, optionally at a specific datetime.
+
+        Args:
+            timestamp: If provided, temporal layers are sampled at this time before
+                plotting. If None, only static spatial layers are shown.
+            method: Sampling strategy used when ``datetime`` is provided.
+            **kwargs: Additional keyword arguments forwarded to the GeoDataFrame
+                plot method.
+        """
         if not self.calculated:
             logger.warning("run 'calculate()' before 'plot_exposure()'")
 
         exposure = self.get_spatial_exposure()
-        if datetime is None:
+        if timestamp is None:
             title = "Spatial data only - no temporal variation shown"
         else:
-            exposure += self.get_temporal_exposure(datetime, method)
-            title = str(datetime)
+            exposure += self.get_temporal_exposure(timestamp, method)
+            title = str(timestamp)
 
         if exposure.empty:
             logger.warning("No exposure sources to plot")
@@ -191,6 +257,6 @@ class Environment(Cachable):
         ax.set_title(title)
         return ax
 
-    def plot_reference(self, **kwargs):
+    def plot_reference(self, **kwargs) -> Axes:
         """Wrapper for GeoDataFrame plot method."""
         return self.spatial_reference_data.gdf.plot(**kwargs)

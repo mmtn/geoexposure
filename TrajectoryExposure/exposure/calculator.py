@@ -242,7 +242,7 @@ class Exposure:
             duration = length.total_seconds()
             centre = start + (length / 2)
 
-            scaling_ii = self.environment.scaling_at_datetime(centre, self.interp_method)
+            scaling_ii = self.environment.scaling_at_timestamp(centre, self.interp_method)
 
             rho = self.mobility.distribution(window, self.environment)
             normalised_density = rho.density / rho.density.sum()

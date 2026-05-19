@@ -10,14 +10,11 @@ import calendar
 import datetime as dt
 import logging
 from collections.abc import Sequence
-from typing import TYPE_CHECKING
+from datetime import datetime
 
 import geopandas as gpd
 import numpy as np
 from shapely import Point, Polygon
-
-if TYPE_CHECKING:
-    pass
 
 logger = logging.getLogger(__name__)
 
@@ -188,38 +185,68 @@ def match_datetime_in_list(
     index = bisect.bisect_left(sorted_list, target)
 
     if to == "floor":
-        if target < first:
-            raise ValueError(f"no datetime <= target: {target}")
-        if index < len(sorted_list) and target == sorted_list[index]:
-            match = sorted_list[index]
-        else:
-            match = sorted_list[index - 1]
-
+        match = _match_datetime_floor(first, index, sorted_list, target)
     elif to == "ceil":
-        if target > last:
-            raise ValueError(f"no datetime >= target: {target}")
-        match = sorted_list[index]
-
+        match = _match_datetime_ceil(index, last, sorted_list, target)
     elif to == "nearest":
-        if index == 0:
-            match = first
-        elif index == len(sorted_list):
-            match = last
-        else:
-            before = sorted_list[index - 1]
-            after = sorted_list[index]
-            # "less than or equal" here returns earliest of two equidistant values
-            if target - before <= after - target:
-                match = before
-            else:
-                match = after
-
+        match = _match_datetime_nearest(first, index, last, sorted_list, target)
     else:
         raise ValueError(f"unknown rounding method: {to}")
 
     if cycle is not None and match == last:
         match = first
 
+    return match
+
+
+def _match_datetime_nearest(
+        first: datetime,
+        index: int,
+        last: datetime,
+        sorted_list: list[datetime],
+        target: datetime
+        ) -> datetime:
+    """Return nearest datetime (helper for ``match_datetime_in_list``)."""
+    if index == 0:
+        match = first
+    elif index == len(sorted_list):
+        match = last
+    else:
+        before = sorted_list[index - 1]
+        after = sorted_list[index]
+        # "less than or equal" here returns earliest of two equidistant values
+        if target - before <= after - target:
+            match = before
+        else:
+            match = after
+    return match
+
+
+def _match_datetime_ceil(
+        index: int,
+        last: datetime,
+        sorted_list: list[datetime],
+        target: datetime
+        ) -> datetime:
+    """Return closest later datetime (helper for ``match_datetime_in_list``)."""
+    if target > last:
+        raise ValueError(f"no datetime >= target: {target}")
+    return sorted_list[index]
+
+
+def _match_datetime_floor(
+        first: datetime,
+        index: int,
+        sorted_list: list[datetime],
+        target: datetime
+        ) -> datetime:
+    """Return closest earlier datetime (helper for ``match_datetime_in_list``)."""
+    if target < first:
+        raise ValueError(f"no datetime <= target: {target}")
+    if index < len(sorted_list) and target == sorted_list[index]:
+        match = sorted_list[index]
+    else:
+        match = sorted_list[index - 1]
     return match
 
 
