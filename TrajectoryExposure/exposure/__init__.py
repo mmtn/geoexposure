@@ -7,7 +7,7 @@ estimates for one or more trajectories. Results are returned as
 :class:`~exposure.results.ExposureSeries` objects.
 """
 
-from .calculator import Exposure
+from .exposure import Exposure
 from .results import ExposureSeries
 
 __all__ = [
