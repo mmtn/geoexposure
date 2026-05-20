@@ -116,7 +116,10 @@ class Mobility(ABC):
 
         x = trajectory.df[X].to_numpy(dtype=float)
         y = trajectory.df[Y].to_numpy(dtype=float)
-        t = trajectory.df[DATETIME].to_numpy(dtype=np.datetime64)
+        t = np.array(
+            [ts.to_pydatetime() for ts in trajectory.df[DATETIME]],
+            dtype=object,
+        )
         dt = trajectory.df[DWELL_TIME_SECONDS].to_numpy(dtype=float)
 
         # Compute bounds from trajectory extent if not provided

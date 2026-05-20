@@ -12,13 +12,13 @@ used to transform geospatial input data into per-cell exposure values:
 from .base import Metric
 from .diversity import DiversityIndex
 from .fragmentation import Fragmentation
-from .land_type_exposure import LandTypeExposure
+from .land_cover import LandCover
 from .proximity import Proximity
 
 __all__ = [
     "DiversityIndex",
     "Fragmentation",
-    "LandTypeExposure",
+    "LandCover",
     "Metric",
     "Proximity",
 ]

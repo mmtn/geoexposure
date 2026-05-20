@@ -6,6 +6,7 @@ receive a maximum exposure value; cells outside decay smoothly with distance
 using a Gaussian profile, reaching zero beyond a specified radius.
 """
 import logging
+import re
 
 import geopandas as gpd
 import numpy as np
@@ -17,7 +18,7 @@ from .proximity import Proximity
 
 logger = logging.getLogger(__name__)
 
-class LandTypeExposure(Metric):
+class LandCover(Metric):
     """Spatial metric computing proximity-weighted exposure to a land cover type.
 
     For each raster cell, exposure is ``1.0`` inside the target land cover and
@@ -38,7 +39,7 @@ class LandTypeExposure(Metric):
             land cover. Defaults to ``1.0``.
         name: Metric name derived from the title, column, value, and radius.
     """
-    metric_title = "land_type_exposure"
+    metric_title = "land_cover"
 
     def __init__(
             self,
@@ -47,7 +48,7 @@ class LandTypeExposure(Metric):
             value: str | float | int | None = None,
             min_inside: float = 1.0,
     ) -> None:
-        """Initialise a LandTypeExposure metric.
+        """Initialise a LandCover metric.
 
         Args:
             radius: Influence radius in CRS units. Exposure decays to zero at this
@@ -72,7 +73,7 @@ class LandTypeExposure(Metric):
         self.column = column
         self.value = value
         self.min_inside = min_inside
-        self.name = self.get_name(self.column, self.value, self.radius)
+        self.name = self.get_name(self.value, self.radius)
 
     def _hash_params(self) -> tuple:
         """Additional hashing parameters for :class:`Cachable` method _make_hash()."""

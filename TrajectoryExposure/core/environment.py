@@ -83,6 +83,20 @@ class Environment(Cachable):
 
         return f"Spatial:\n{spatial}\n\nTemporal:\n{temporal}"
 
+    @staticmethod
+    def _spatial_col(key: str, metric_name: str) -> str:
+        """Return the column name for a spatial metric.
+
+        Assumes ``metric_name`` was produced by :meth:`~metrics.base.Metric.get_name`,
+        which uses the same ``__`` separator convention.
+        """
+        return "__".join(["spatial", key, metric_name])
+
+    @staticmethod
+    def _temporal_col(key: str) -> str:
+        """Return the column name for a temporal layer."""
+        return "__".join(["temporal", key])
+
     def calculate(self) -> None:
         """Compute all spatial/temporal layers on the raster grid."""
         if self.calculated:
@@ -110,13 +124,13 @@ class Environment(Cachable):
         columns: list[str] = []
 
         columns.extend(
-            f"{key}_{metric.name}"
+            self._spatial_col(key, metric.name)
             for key, spatial in self.spatial_data.items()
             for metric in spatial.metrics.keys()
         )
 
         columns.extend(
-            f"temporal_{key}"
+            self._temporal_col(key)
             for key in temporal_data.keys()
         )
 
@@ -127,7 +141,7 @@ class Environment(Cachable):
         spatial_total = self.gdf_raster.copy()
         for key, spatial in self.spatial_data.items():
             for metric in spatial.metrics.keys():
-                col = f"{key}_{metric.name}"
+                col = self._spatial_col(key, metric.name)
                 spatial_total[col] = spatial.gdf_metrics[metric.name]
         return spatial_total
 
@@ -147,7 +161,7 @@ class Environment(Cachable):
         temporal_data = self.temporal_data if self.temporal_data is not None else {}
 
         for key, temporal in temporal_data.items():
-            col = f"temporal_{key}"
+            col = self._temporal_col(key)
             data_at_timestamp = temporal.sample(timestamp, method=method)
             if issubclass(temporal.data_type, (float, np.floating)):
                 continue  # floats for scaling are used separately in exposure.py

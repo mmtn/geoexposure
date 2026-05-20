@@ -28,7 +28,7 @@ from .core.enums import GapMethod, SamplingMethod, TemporalType
 from .core.environment import Environment
 from .data import SpatialData, TemporalData, Trajectory
 from .exposure import Exposure, ExposureSeries
-from .metrics import DiversityIndex, Fragmentation, LandTypeExposure, Proximity
+from .metrics import DiversityIndex, Fragmentation, LandCover, Proximity
 from .mobility import KDE, AdaptiveUncertainty, Mobility, PointOverlay
 
 __all__ = [
@@ -40,7 +40,7 @@ __all__ = [
     "ExposureSeries",
     "Fragmentation",
     "GapMethod",
-    "LandTypeExposure",
+    "LandCover",
     "Mobility",
     "PointOverlay",
     "Proximity",
