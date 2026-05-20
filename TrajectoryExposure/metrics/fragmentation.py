@@ -7,6 +7,7 @@ the neighbourhood.
 """
 
 import logging
+import re
 
 import geopandas as gpd
 import pandas as pd
@@ -58,7 +59,7 @@ class Fragmentation(Metric):
         self.column = column
         self.value = value
         self.radius = radius
-        self.name = self.get_name(self.column, self.value, self.radius)
+        self.name = self.get_name(self.value, self.radius)
 
     def _hash_params(self) -> tuple:
         """Additional hashing parameters for :class:`Cachable` method _make_hash()."""

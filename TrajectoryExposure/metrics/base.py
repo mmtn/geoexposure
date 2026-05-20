@@ -12,6 +12,7 @@ cache filenames and metric naming.
 from __future__ import annotations
 
 import logging
+import re
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
 
@@ -46,28 +47,34 @@ class Metric(Cachable, ABC):
     cache_dir = ".cache/metrics"
 
     def __init__(self) -> None:
-        """Abstract base class constructor for Metric."""
-        self.name = None
-        self.data = None
+        """Initialise empty name and data attributes."""
+        self.name: str | None = None
+        self.data: pd.Series | None = None
 
     def get_name(self, *args: object) -> str:
         """Return a string identifying this metric from its type and arguments.
 
+        Names are formatted as ``"{metric_title}__{arg1}__{arg2}..."`` using
+        double-underscore separators. This format is assumed by
+        :meth:`~core.environment.Environment._spatial_col`, which constructs
+        column names of the form ``"spatial__{key}__{metric.name}"``. The
+        separator must remain consistent between the two methods.
+
         Args:
-            *args: Values to append to the metric title, separated by underscores.
+            *args: Values to append to the metric title, separated by ``__``.
                 ``None`` values are filtered out.
 
         Returns:
-            A string of the form ``"{metric_title}_{arg1}_{arg2}..."``, or
+            A string of the form ``"{metric_title}__{arg1}__{arg2}..."``, or
             just ``"{metric_title}"`` if no non-``None`` arguments are provided.
         """
-        joining_str = "_"
-        filtered = [f"{arg}" for arg in args if arg is not None]
-        arg_string = joining_str.join(filtered) if filtered else None
-
-        if arg_string is None:
-            return f"{self.metric_title}"
-        return f"{self.metric_title}_{arg_string}"
+        filtered = [
+            self._sanitise_label(f"{arg}")
+            for arg in args
+            if arg is not None and arg != ""
+        ]
+        arg_string = "__".join(filtered) if filtered else None
+        return f"{self.metric_title}__{arg_string}" if arg_string else self.metric_title
 
     def calculate(
             self,
@@ -94,6 +101,15 @@ class Metric(Cachable, ABC):
             label=self.metric_title,
         )
         return self.data
+
+    @staticmethod
+    def _sanitise_label(value: str) -> str:
+        """Replace non-alphanumeric characters with underscores for use in column names.
+
+        Used to normalise land cover category values (e.g. ``"built-up areas"``
+        becomes ``"built_up_areas"``) before passing them to :meth:`get_name`.
+        """
+        return re.sub(r"[^a-zA-Z0-9]+", "_", value).strip("_")
 
     def _hash_params(self) -> tuple:
         """Return metric-specific parameters to include in the cache hash key.

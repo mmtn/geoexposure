@@ -7,6 +7,7 @@ geometries to a particular land cover category.
 """
 
 import logging
+import re
 
 import geopandas as gpd
 import pandas as pd
@@ -54,7 +55,7 @@ class Proximity(Metric):
             raise ValueError("Both 'column' and 'value' must be set, or both must be None.")
         self.column = column
         self.value = value
-        self.name = self.get_name(self.column, self.value)
+        self.name = self.get_name(self.value)
 
     def _hash_params(self) -> tuple:
         """Additional hashing parameters for :class:`Cachable` method _make_hash()."""
