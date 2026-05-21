@@ -154,8 +154,6 @@ class Cachable:
         args: tuple,
         hash_args: tuple = (),
         label: str = "cache",
-        *,
-        verbose: bool = True,
     ) -> Any:
         """Returns a cached result if available, otherwise computes and caches it.
 
@@ -164,7 +162,6 @@ class Cachable:
             args: Tuple of arguments passed both to fn and to the hasher.
             hash_args: Tuple of additional args used to make the hash.
             label: Human-readable label for the cache file.
-            verbose: Whether to log activity in this method.
 
         Returns:
             The cached or freshly computed result.
@@ -173,12 +170,10 @@ class Cachable:
         result = self._load_from_cache(key, label)
 
         if result is not None:
-            if verbose:
-                logger.info(f"Loading cached {label} ({key})...")
+            logger.debug(f"Loading cached {label} ({key})...")
             return result
 
-        if verbose:
-            logger.info(f"Computing {label} ({key})...")
+        logger.info(f"Computing {label} ({key})...")
         result = fn(*args)
         self._save_to_cache(result, key, label)
         return result

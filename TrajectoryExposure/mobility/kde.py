@@ -109,7 +109,6 @@ class KDE(Mobility, Cachable):
             args=(data.eval_coords,),
             hash_args=(*self._hash_params(), coordinates, data.dt),
             label="kde",
-            verbose=True,
         )
         np.seterr(divide="warn")
 

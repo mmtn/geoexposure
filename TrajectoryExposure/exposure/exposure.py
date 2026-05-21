@@ -177,7 +177,7 @@ class Exposure:
         exposure_data = []
 
         last_index = len(windows) - 1
-        logger.info(
+        logger.debug(
             f"Computing exposure in {len(windows)} windows between {start_time} and {end_time}"
             f" (temporal resolution: {temporal_resolution})",
         )

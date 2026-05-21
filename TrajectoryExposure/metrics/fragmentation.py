@@ -46,7 +46,7 @@ class Fragmentation(Metric):
 
     metric_title = "fragmentation"
 
-    def __init__(self, column: str, value: str | float | int, radius: int | float) -> None:
+    def __init__(self, radius: int | float, column: str, value: str | float | int) -> None:
         """Initialise a Fragmentation metric for a specified land cover category.
 
         Args:

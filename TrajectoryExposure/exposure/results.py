@@ -8,6 +8,8 @@ aggregate to coarser time grids, and plot exposure over time.
 """
 
 import datetime as dt
+import pickle
+from pathlib import Path
 
 import pandas as pd
 
@@ -201,3 +203,25 @@ class ExposureSeries:
         aggregated["window_centre"] = starts + ((ends - starts) / 2)
 
         return ExposureSeries.from_dataframe(aggregated, source_id=self.source_id)
+
+    def save(self, path: Path) -> None:
+        """Serialise this ExposureSeries to disk.
+
+        Args:
+            path: Destination file path. Parent directory must exist.
+        """
+        with open(path, "wb") as f:
+            pickle.dump(self, f)
+
+    @classmethod
+    def load(cls, path: Path) -> "ExposureSeries":
+        """Deserialise an ExposureSeries from disk.
+
+        Args:
+            path: Path to a previously saved ExposureSeries file.
+
+        Returns:
+            The deserialised ExposureSeries instance.
+        """
+        with open(path, "rb") as f:
+            return pickle.load(f)  # noqa: S301
