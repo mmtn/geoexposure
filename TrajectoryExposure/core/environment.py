@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -28,7 +29,10 @@ class Environment(Cachable):
     """Spatial/temporal exposure sources sampled on a fixed raster."""
 
     EXPOSURE_COLUMN = "exposure"
-    cache_dir = ".cache/environment"
+
+    @property
+    def cache_dir(self) -> Path:
+        return super().cache_dir / "environment"
 
     def __init__(
             self,

@@ -9,6 +9,7 @@ cached to disk via the :class:`~core.cachable.Cachable` mixin.
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import geopandas as gpd
@@ -28,8 +29,11 @@ logger = logging.getLogger(__name__)
 
 class KDE(Mobility, Cachable):
     """Concrete Mobility class using kernel density estimation to compute occupancy density."""
-    cache_dir = ".cache/kde"
     MAX_BUFFER_METRES = 1000
+
+    @property
+    def cache_dir(self) -> Path:
+        return super().cache_dir / "kde"
 
     def __init__(self, kernel: str, bandwidth: float) -> None:
         """Initialise KDE mobility instance."""
@@ -72,10 +76,10 @@ class KDE(Mobility, Cachable):
         return estimator
 
     def distribution(
-        self,
-        trajectory: Trajectory,
-        environment: Environment,
-        bounds: tuple[float, float, float, float] | None = None,
+            self,
+            trajectory: Trajectory,
+            environment: Environment,
+            bounds: tuple[float, float, float, float] | None = None,
     ) -> gpd.GeoDataFrame:
         """Compute density from KDE evaluation on rasterised grid from environment.
 

@@ -1,8 +1,8 @@
 """Mixin providing general-purpose disk caching for any callable result."""
 
-
 import hashlib
 import logging
+import os
 import pickle
 from _hashlib import HASH
 from collections.abc import Callable
@@ -26,7 +26,20 @@ class Cachable:
         cache_dir: Directory in which cached files are stored.
     """
 
-    cache_dir: str = ".cache"
+    _cache_dir: Path | None = None
+
+    @property
+    def cache_dir(self) -> Path:
+        if self._cache_dir is not None:
+            return Path(self._cache_dir)
+        env = os.environ.get("TRAJECTORY_EXPOSURE_CACHE_DIR")
+        if env is not None:
+            return Path(env)
+        return Path(".cache")
+
+    @cache_dir.setter
+    def cache_dir(self, value: str | Path) -> None:
+        self._cache_dir = Path(value)
 
     def _make_hash(self, *args) -> str:
         """Computes a deterministic MD5 hash from arbitrary input arguments.
@@ -119,6 +132,7 @@ class Cachable:
         """
         # TODO: file lock before parallelisation to prevent issues
         path = self._cache_path(key, label)
+        logger.debug("Saving to %s", path)
         with path.open("wb") as f:
             pickle.dump(obj, f)
 
@@ -133,6 +147,7 @@ class Cachable:
             The deserialised object if the cache entry exists, else None.
         """
         path = self._cache_path(key, label)
+        logger.debug("Loading from %s", path)
         if not path.exists():
             return None
 
@@ -170,7 +185,6 @@ class Cachable:
         result = self._load_from_cache(key, label)
 
         if result is not None:
-            logger.debug(f"Loading cached {label} ({key})...")
             return result
 
         logger.info(f"Computing {label} ({key})...")

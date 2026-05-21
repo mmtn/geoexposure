@@ -14,6 +14,7 @@ from __future__ import annotations
 import logging
 import re
 from abc import ABC, abstractmethod
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -44,7 +45,10 @@ class Metric(Cachable, ABC):
     """
 
     metric_title = "metric"
-    cache_dir = ".cache/metrics"
+
+    @property
+    def cache_dir(self) -> Path:
+        return super().cache_dir / "metrics"
 
     def __init__(self) -> None:
         """Initialise empty name and data attributes."""
