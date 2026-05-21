@@ -21,7 +21,8 @@ def _run_single(key: ScenarioKey, scenario: Scenario) -> ExposureSeries:
     Returns:
         The computed ExposureSeries.
     """
-    trajectory = scenario.trajectory.with_dwells(scenario.gap_method)
+    method, resolution = scenario.gap_method
+    trajectory = scenario.trajectory.with_dwells(method, resolution=resolution)
     exposure = Exposure(
         mobility=scenario.mobility,
         environment=scenario.environment,
@@ -61,17 +62,26 @@ class ScenarioCalculator:
         self.output_dir = output_dir
         self.max_workers = max_workers
 
-    def run(self) -> dict[ScenarioKey, ExposureSeries]:
+    def run(self, mode: str = "product") -> dict[ScenarioKey, ExposureSeries]:
         """Run all scenario combinations and return results.
 
         Environments are pre-calculated before workers are spawned to
         avoid cache write races in parallel execution.
 
+        Args:
+            mode: method of expanding ScenarioBatch
+
         Returns:
             Mapping from ScenarioKey to ExposureSeries for every combination in the batch.
         """
         self._precalculate_environments()
-        scenarios = self.batch.to_scenarios()
+
+        if mode == "product":
+            scenarios = self.batch.to_product()
+        elif mode == "zip":
+            scenarios = self.batch.to_zip()
+        else:
+            raise ValueError(f"unknown mode: {mode}")
 
         if self.max_workers == 1 or self.max_workers is None:
             logging.info("Calculating %s scenarios", len(scenarios))
@@ -133,4 +143,4 @@ class ScenarioCalculator:
         for result in results:
             path = result.key.to_path(self.output_dir)
             path.parent.mkdir(parents=True, exist_ok=True)
-            result.exposure.save(path)
+            result.save(path)
