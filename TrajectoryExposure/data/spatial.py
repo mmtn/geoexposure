@@ -22,7 +22,20 @@ import pandas as pd
 logger = logging.getLogger(__name__)
 
 class SpatialData:
-    """Class docstring: representation of geospatial environmental data including metrics."""
+    """Geospatial vector data associated with a set of spatial exposure metrics.
+
+    Wraps a vector dataset loaded from disk and associates it with a mapping of
+    :class:`~metrics.base.Metric` objects and their weights. Metrics are evaluated
+    on a raster grid via :meth:`calculate` and the weighted sum is accessible via
+    :meth:`metric_sum`. Instances can be interpolated between two states to support
+    temporally varying spatial data within :class:`~data.temporal.TemporalData`.
+
+    Attributes:
+        gdf: The loaded vector GeoDataFrame.
+        metrics: Mapping of :class:`~metrics.base.Metric` instances to their weights.
+        gdf_metrics: GeoDataFrame of computed metric values, populated after
+            :meth:`calculate` is called.
+    """
 
     def __init__(
             self,

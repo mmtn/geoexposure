@@ -19,7 +19,29 @@ type TimeDeltaLike = dt.timedelta | pd.Timedelta
 
 
 class TemporalData:
-    """Time-indexed values sampled with nearest or interpolation."""
+    """A time-indexed series of spatial or scalar values sampled at arbitrary times.
+
+    Maps a set of timestamps to either :class:`~data.spatial.SpatialData` instances
+    — representing the spatial exposure environment at different points in time —
+    or scalar ``float`` values representing a time-varying scaling factor.
+
+    Supports two temporal modes via :class:`~core.enums.TemporalType`:
+
+    - ``CYCLIC``: timestamps are interpreted as offsets within a repeating cycle
+      of length ``cycle_duration`` (e.g. time of day or season).
+    - ``DATED``: timestamps are absolute :class:`~datetime.datetime` values with
+      no repeating structure.
+
+    Values can be retrieved at arbitrary times using nearest, floor, ceil, or
+    linear interpolation strategies via :meth:`sample`.
+
+    Attributes:
+        temporal_type: Whether the data is cyclic or dated.
+        temporal_resolution: The minimum time step between entries, inferred
+            from the data if not provided.
+        cycle_duration: Length of the repeating cycle for ``CYCLIC`` data.
+            Must be set if ``temporal_type`` is ``CYCLIC``.
+    """
 
     VALID_TYPES = (float, SpatialData)
 

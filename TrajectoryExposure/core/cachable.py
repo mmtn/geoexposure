@@ -30,6 +30,13 @@ class Cachable:
 
     @property
     def cache_dir(self) -> Path:
+        """Return the cache directory as a Path.
+
+        Resolution order:
+        1. Instance-level ``_cache_dir`` if set.
+        2. ``TRAJECTORY_EXPOSURE_CACHE_DIR`` environment variable if set.
+        3. Defaults to ``".cache"`` in the current working directory.
+        """
         if self._cache_dir is not None:
             return Path(self._cache_dir)
         env = os.environ.get("TRAJECTORY_EXPOSURE_CACHE_DIR")
@@ -39,6 +46,7 @@ class Cachable:
 
     @cache_dir.setter
     def cache_dir(self, value: str | Path) -> None:
+        """Set the instance-level cache directory, overriding environment and default."""
         self._cache_dir = Path(value)
 
     def _make_hash(self, *args) -> str:

@@ -1,26 +1,45 @@
+"""Scenario execution engine for batched exposure calculations.
+
+Provides :class:`ScenarioCalculator`, which executes all scenario combinations defined in a
+:class:`~exposure.scenario.ScenarioBatch`, and the module-level helper :func:`_run_one`, which
+evaluates a single :class:`~exposure.scenario.Scenario` and serialises the result to disk.
+
+Supports both sequential and parallel execution via
+:class:`~concurrent.futures.ProcessPoolExecutor`. Environments are pre-calculated
+before workers are spawned to ensure metric caches are warm and avoid write races
+in parallel execution.
+"""
+
 import logging
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 
+import numpy as np
+
 from .exposure import Exposure
-from .results import ExposureSeries
 from .scenario import Scenario, ScenarioBatch, ScenarioKey, ScenarioResult
 
 logger = logging.getLogger(__name__)
 
 
-def _run_single(key: ScenarioKey, scenario: Scenario) -> ExposureSeries:
-    """Compute exposure for a single scenario combination.
+def _run_one(key: ScenarioKey, scenario: Scenario, output_dir: Path) -> None:
+    """Compute exposure for a single scenario and save the result to disk.
 
-    This is a module-level function so it is pickleable for
-    multiprocessing.
+    Applies the gap-filling strategy to the trajectory, constructs an
+    :class:`~exposure.exposure.Exposure` model, computes the exposure series and
+    occupancy distribution, and serialises a :class:`~exposure.scenario.ScenarioResult`
+    to the path determined by ``key.to_path(output_dir)``.
+
+    This is a module-level function so that it is pickleable for use with
+    :class:`~concurrent.futures.ProcessPoolExecutor`.
 
     Args:
-        scenario: Fully resolved single scenario to evaluate.
-
-    Returns:
-        The computed ExposureSeries.
+        key: Identifier for this scenario, used to determine the output path.
+        scenario: Fully resolved scenario containing the trajectory, mobility model,
+            environment, gap method, and timestep.
+        output_dir: Root directory under which the result file is written.
     """
+
     method, resolution = scenario.gap_method
     trajectory = scenario.trajectory.with_dwells(method, resolution=resolution)
     exposure = Exposure(
@@ -30,12 +49,16 @@ def _run_single(key: ScenarioKey, scenario: Scenario) -> ExposureSeries:
     )
     series = exposure.for_trajectory(trajectory)
     occupancy = scenario.mobility.distribution(trajectory, scenario.environment)
-    return ScenarioResult(
+    coords = np.column_stack([occupancy.point_geometry.x, occupancy.point_geometry.y], )
+    result = ScenarioResult(
         key=key,
-        exposure=series,
-        occupancy=occupancy,
         trajectory=trajectory,
+        exposure=series,
+        occupancy_density=occupancy["density"],
+        occupancy_coordinates=coords,
+        crs=occupancy.crs
     )
+    result.save(result.key.to_path(output_dir))
 
 
 class ScenarioCalculator:
@@ -49,31 +72,45 @@ class ScenarioCalculator:
         batch: The ScenarioBatch to execute.
         output_dir: If provided, each ExposureSeries is saved to disk
             under this directory using ScenarioKey.to_path().
-        max_workers: Number of parallel workers. If None or 1,
+        num_workers: Number of parallel workers. If None or 1,
             runs sequentially.
     """
+
     def __init__(
             self,
             batch: ScenarioBatch,
-            output_dir: Path | None = None,
-            max_workers: int | None = None,
+            output_dir: Path,
+            num_workers: int | None = None,
     ) -> None:
-        self.batch = batch
-        self.output_dir = output_dir
-        self.max_workers = max_workers
-
-    def run(self, mode: str = "product") -> dict[ScenarioKey, ExposureSeries]:
-        """Run all scenario combinations and return results.
-
-        Environments are pre-calculated before workers are spawned to
-        avoid cache write races in parallel execution.
+        """Initialise a ScenarioCalculator.
 
         Args:
-            mode: method of expanding ScenarioBatch
+            batch: The :class:`~exposure.scenario.ScenarioBatch` defining the scenarios to execute.
+            output_dir: Directory under which each result is saved.
+            num_workers: Number of parallel worker processes, sequential if ``None`` or ``1``.
+        """
+        self.batch = batch
+        self.output_dir = output_dir
+        self.num_workers = num_workers
+
+    def run(self, mode: str = "product") -> list[ScenarioKey]:
+        """Execute all scenario combinations and return their keys.
+
+        Expands the batch using the specified mode, pre-calculates all environments, then runs each
+        scenario either sequentially or in parallel depending on ``num_workers``.
+
+        Args:
+            mode: Expansion strategy for the batch. Either ``"product"`` for a full Cartesian
+                product of all axes, or ``"zip"`` for paired combinations.
 
         Returns:
-            Mapping from ScenarioKey to ExposureSeries for every combination in the batch.
+            List of :class:`~exposure.scenario.ScenarioKey` instances, one per scenario executed,
+            in expansion order.
+
+        Raises:
+            ValueError: If ``mode`` is not ``"product"`` or ``"zip"``.
         """
+
         self._precalculate_environments()
 
         if mode == "product":
@@ -83,21 +120,17 @@ class ScenarioCalculator:
         else:
             raise ValueError(f"unknown mode: {mode}")
 
-        if self.max_workers == 1 or self.max_workers is None:
-            logging.info("Calculating %s scenarios", len(scenarios))
-            results = self._run_sequential(scenarios)
+        lengths = self.batch.axis_lengths
+        for axis in self.batch.axes:
+            logger.info(f"- {lengths[axis]:-3d} {axis}")
+
+        if self.num_workers == 1 or self.num_workers is None:
+            self._run_sequential(scenarios)
         else:
-            logging.info(
-                "Calculating %s scenarios with %s workers",
-                len(scenarios),
-                self.max_workers,
-            )
-            results = self._run_parallel(scenarios)
+            self._run_parallel(scenarios)
 
-        if self.output_dir is not None:
-            self._save(results)
-
-        return results
+        logger.info(f"Calculation complete")
+        return [key for key, _ in scenarios]
 
     def _precalculate_environments(self) -> None:
         """Call calculate() on all environments before parallelising.
@@ -109,38 +142,30 @@ class ScenarioCalculator:
             logger.info("Pre-calculating environment: %s", label)
             env.calculate()
 
-    def _run_sequential(
-            self, scenarios: list[tuple[ScenarioKey, Scenario]],
-    ) -> list[ScenarioResult]:
+    def _run_sequential(self, scenarios: list[tuple[ScenarioKey, Scenario]]) -> None:
         """Run combinations sequentially."""
-        results = []
+        logger.info("Calculating %s scenarios", len(scenarios))
         for key, scenario in scenarios:
-            logger.info("Running scenario:\n>>> %s", key)
-            results.append(_run_single(key, scenario))
-        return results
+            _run_one(key, scenario, self.output_dir)
+            logger.info("Completed: %s", key)
 
-    def _run_parallel(
-            self, scenarios: list[tuple[ScenarioKey, Scenario]],
-    ) -> list[ScenarioResult]:
+    def _run_parallel(self, scenarios: list[tuple[ScenarioKey, Scenario]]) -> None:
         """Run combinations in parallel using ProcessPoolExecutor."""
-        results = []
-        with ProcessPoolExecutor(max_workers=self.max_workers) as executor:
+        logger.info(
+            "Calculating %s scenarios with %s workers",
+            len(scenarios),
+            self.num_workers,
+        )
+        with ProcessPoolExecutor(max_workers=self.num_workers) as executor:
             futures = {
-                executor.submit(_run_single, key, scenario): key
+                executor.submit(_run_one, key, scenario, self.output_dir): key
                 for key, scenario in scenarios
             }
             for future in as_completed(futures):
                 key = futures[future]
                 try:
-                    results.append(future.result())
+                    future.result()
                     logger.info("Completed: %s", key)
-                except Exception:
+                except Exception:  # noqa: BLE001
                     logger.exception("Failed: %s", key)
-        return results
-
-    def _save(self, results: list[ScenarioResult]) -> None:
-        """Serialise each ExposureSeries to disk under output_dir."""
-        for result in results:
-            path = result.key.to_path(self.output_dir)
-            path.parent.mkdir(parents=True, exist_ok=True)
-            result.save(path)
+                    raise

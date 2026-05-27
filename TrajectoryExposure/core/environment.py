@@ -32,6 +32,7 @@ class Environment(Cachable):
 
     @property
     def cache_dir(self) -> Path:
+        """Return the cache directory for environments, nested under the base cache directory."""
         return super().cache_dir / "environment"
 
     def __init__(

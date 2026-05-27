@@ -10,5 +10,8 @@ TrajectoryExposure/tests/data/trajectories
 
 # Cache
 .cache
-local
 /archived/
+/analysis/figure_data/
+/batch_output/
+/figures/
+/output/

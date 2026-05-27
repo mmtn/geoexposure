@@ -48,6 +48,7 @@ class Metric(Cachable, ABC):
 
     @property
     def cache_dir(self) -> Path:
+        """Return the cache directory for metrics, nested under the base cache directory."""
         return super().cache_dir / "metrics"
 
     def __init__(self) -> None:

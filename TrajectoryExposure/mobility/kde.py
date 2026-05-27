@@ -33,6 +33,7 @@ class KDE(Mobility, Cachable):
 
     @property
     def cache_dir(self) -> Path:
+        """Return the cache directory for KDEs, nested under the base cache directory."""
         return super().cache_dir / "kde"
 
     def __init__(self, kernel: str, bandwidth: float) -> None:
