@@ -28,12 +28,13 @@ from ..core.environment import Environment
 from ..core.spatial_utils import infer_raster_grid
 from ..data.trajectory import Trajectory
 from ..mobility.base import Mobility
+from .exposure import Exposure
 
 if TYPE_CHECKING:
     import geopandas as gpd
     import pandas as pd
 
-    from .. import ExposureSeries
+    from .results import ExposureSeries
 
 logger = logging.getLogger(__name__)
 
@@ -41,25 +42,6 @@ logger = logging.getLogger(__name__)
 def _sanitise_label(label: str) -> str:
     """Replace characters unsafe in folder/file names with underscores."""
     return re.sub(r'[<>:"/\\|?* ]', "_", label)
-
-
-@attrs.frozen
-class Scenario:
-    """"A fully resolved set of inputs for a single exposure calculation.
-
-    Attributes:
-        trajectory: The Trajectory to evaluate.
-        mobility: Mobility model used to compute the occupancy distribution.
-        environment: Environment defining spatial and temporal exposure sources.
-        gap_method: Tuple of ``(GapMethod, resolution)`` used to fill trajectory gaps.
-        timestep: Time window size for the exposure calculation. If ``None``, resolved from the
-            environment or mobility model.
-    """
-    trajectory: Trajectory
-    mobility: Mobility
-    environment: Environment
-    gap_method: tuple[GapMethod, dt.timedelta | None]
-    timestep: dt.timedelta | None = None
 
 
 @attrs.frozen
@@ -129,6 +111,60 @@ class ScenarioKey:
 
 
 @attrs.frozen
+class Scenario:
+    """"A fully resolved set of inputs for a single exposure calculation.
+
+    Attributes:
+        trajectory: The Trajectory to evaluate.
+        mobility: Mobility model used to compute the occupancy distribution.
+        environment: Environment defining spatial and temporal exposure sources.
+        gap_method: Tuple of ``(GapMethod, resolution)`` used to fill trajectory gaps.
+        timestep: Time window size for the exposure calculation. If ``None``, resolved from the
+            environment or mobility model.
+    """
+    trajectory: Trajectory
+    mobility: Mobility
+    environment: Environment
+    gap_method: tuple[GapMethod, dt.timedelta | None]
+    timestep: dt.timedelta | None = None
+
+    def run(self, key: ScenarioKey | None = None) -> "ScenarioResult":
+        """Return the result of computing exposure for a single scenario.
+
+        Applies the gap-filling strategy to the trajectory, constructs an
+        :class:`~exposure.exposure.Exposure` model, computes the exposure series and
+        occupancy distribution, and return a :class:`~exposure.scenario.ScenarioResult`.
+
+        The code is duplicated in :meth:`~exposure.calculator._run_one` for calling in
+        a parallel context.
+
+        Args:
+            key: optional identifier for this scenario
+
+        Returns:
+            the result of evaluating the scenario
+        """
+        method, resolution = self.gap_method
+        trajectory = self.trajectory.with_dwell_times(method, resolution=resolution)
+        exposure = Exposure(
+            mobility=self.mobility,
+            environment=self.environment,
+            timestep=self.timestep,
+        )
+        series = exposure.for_trajectory(trajectory)
+        occupancy = self.mobility.distribution(trajectory, self.environment)
+        coords = np.column_stack([occupancy.point_geometry.x, occupancy.point_geometry.y], )
+        return ScenarioResult(
+            key=key,
+            trajectory=trajectory,
+            exposure=series,
+            occupancy_density=occupancy["density"],
+            occupancy_coordinates=coords,
+            crs=occupancy.crs,
+        )
+
+
+@attrs.frozen
 class ScenarioResult:
     """The result of a single scenario evaluation.
 
@@ -143,7 +179,7 @@ class ScenarioResult:
         occupancy_coordinates: Array of raster cell centroid coordinates.
         crs: Coordinate reference system of the raster grid as a WKT string.
     """
-    key: ScenarioKey
+    key: ScenarioKey | None
     trajectory: Trajectory
     exposure: "ExposureSeries"
     occupancy_density: "pd.Series"
@@ -178,7 +214,6 @@ class ScenarioResult:
         return gdf
 
 
-@attrs.define
 class ScenarioBatch:
     """A collection of input axes to be expanded into individual scenarios.
 
@@ -186,28 +221,41 @@ class ScenarioBatch:
     and timesteps. These can be expanded into individual :class:`Scenario`
     instances either as a full Cartesian product via :meth:`to_product`, or as
     paired combinations via :meth:`to_zip`.
-
-    All trajectories must have a ``source_id`` set.
-
-    Attributes:
-        trajectories: Sequence of trajectories to evaluate.
-        mobility_models: Named mapping of mobility models.
-        environments: Named mapping of environments.
-        gap_methods: Sequence of ``(GapMethod, resolution)`` pairs.
-        timesteps: Sequence of time window sizes.
     """
-    trajectories: Sequence[Trajectory]
-    mobility_models: dict[str, Mobility]
-    environments: dict[str, Environment]
-    gap_methods: Sequence[tuple[GapMethod, dt.timedelta | None]]
-    timesteps: Sequence[dt.timedelta]
 
-    def __attrs_post_init__(self) -> None:
-        """Validate that all trajectories have ``source_id`` set.
+    def __init__(
+            self,
+            trajectories: Trajectory | Sequence[Trajectory],
+            mobility_models: Mobility | dict[str, Mobility],
+            environments: Environment | dict[str, Environment],
+            gap_methods: tuple[GapMethod, dt.timedelta] | Sequence[tuple[GapMethod, dt.timedelta]],
+            timesteps: dt.timedelta | Sequence[dt.timedelta] | None,
+    ) -> "ScenarioBatch":
+        """Construct a ScenarioBatch from flexible input types.
 
-        Raises:
-            ValueError: If any trajectory is missing ``source_id``.
+        Accepts single instances or sequences for each axis, and single instances or dicts for
+        mobility models and environments. Single instances are wrapped automatically. Single-valued
+        instances for `mobility_models` and `environments` are stored with the dict keys "mobility"
+        and "environment" respectively. All trajectories must have a ``source_id`` set.
+
+
+        Args:
+            trajectories: One or more trajectories to evaluate.
+            mobility_models: One or more named mobility models.
+            environments: One or more named environments.
+            gap_methods: One or more ``(GapMethod, resolution)`` pairs.
+            timesteps: One or more time window sizes, or ``None`` for a single ``None`` timestep.
+
+        Returns:
+            A new :class:`ScenarioBatch` instance.
         """
+        self.trajectories = _ensure_sequence(trajectories)
+        self.mobility_models = _ensure_dict(mobility_models, Mobility, "mobility")
+        self.environments = _ensure_dict(environments, Environment, "environment")
+        self.gap_methods = _ensure_gap_methods(gap_methods)
+        self.timesteps = _ensure_sequence(timesteps)
+
+        # Validate that all trajectories have ``source_id`` set.
         missing = [i for i, t in enumerate(self.trajectories) if t.source_id is None]
         if missing:
             raise ValueError(
@@ -256,40 +304,6 @@ class ScenarioBatch:
             len(self.environments),
             len(self.timesteps),
             len(self.gap_methods),
-        )
-
-    @classmethod
-    def create(
-            cls,
-            trajectories: Trajectory | Sequence[Trajectory],
-            mobility_models: Mobility | dict[str, Mobility],
-            environments: Environment | dict[str, Environment],
-            gap_methods: tuple[GapMethod, dt.timedelta] | Sequence[tuple[GapMethod, dt.timedelta]],
-            timesteps: dt.timedelta | Sequence[dt.timedelta] | None,
-    ) -> "ScenarioBatch":
-        """Construct a ScenarioBatch from flexible input types.
-
-        Accepts single instances or sequences for each axis, and single instances or dicts for
-        mobility models and environments. Single instances are wrapped automatically. Single-valued
-        instances for `mobility_models` and `environments` are stored with the dict keys "mobility"
-        and "environment" respectively.
-
-        Args:
-            trajectories: One or more trajectories to evaluate.
-            mobility_models: One or more named mobility models.
-            environments: One or more named environments.
-            gap_methods: One or more ``(GapMethod, resolution)`` pairs.
-            timesteps: One or more time window sizes, or ``None`` for a single ``None`` timestep.
-
-        Returns:
-            A new :class:`ScenarioBatch` instance.
-        """
-        return cls(
-            trajectories=_ensure_sequence(trajectories),
-            mobility_models=_ensure_dict(mobility_models, Mobility, "mobility"),
-            environments=_ensure_dict(environments, Environment, "environment"),
-            gap_methods=_ensure_gap_methods(gap_methods),
-            timesteps=_ensure_sequence(timesteps),
         )
 
     def to_product(self) -> list[tuple[ScenarioKey, Scenario]]:
@@ -360,7 +374,7 @@ class ScenarioBatch:
     def process(
             self,
             max_workers: int | None = None,
-            output_dir: Path | None = None,
+            output_dir: Path | str | None = None,
             mode: str = "product",
     ) -> list[ScenarioKey]:
         """Returns a list of ScenarioResults for all Scenarios in the batch.
@@ -383,10 +397,29 @@ class ScenarioBatch:
         else:
             raise ValueError(f"unknown batch mode: {mode}")
 
+        output_dir = Path(output_dir)
         num_workers = None if max_workers is None else min(max_workers, batch_len)
+
         from .calculator import ScenarioCalculator  # noqa: PLC0415
         calculator = ScenarioCalculator(self, output_dir, num_workers)
         return calculator.run(mode=mode)
+
+    @staticmethod
+    def load_results(keys: list[ScenarioKey], output_dir: Path | str) -> list[ScenarioResult]:
+        """Load results from provided path using precomputed keys.
+
+        Args:
+            keys: a list of ScenarioKey objects.
+            output_dir: location where results were saved.
+
+        Returns:
+            a list of ScenarioResult objects
+        """
+        output_dir = Path(output_dir)
+        return [
+            ScenarioResult.load(key.to_path(output_dir))
+            for key in keys
+        ]
 
     def _validate_zip_lengths(self) -> int:
         """Validate zip axis lengths and return the batch size.

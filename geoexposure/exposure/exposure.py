@@ -16,6 +16,7 @@ import pandas as pd
 from ..core import datetime_utils
 from ..core.environment import Environment
 from ..data.columns import DATETIME
+from ..data.gap_methods import GapMethod
 from ..data.resampling import SamplingMethod
 from ..data.trajectory import Trajectory
 from ..exposure.results import ExposureSeries
@@ -94,8 +95,17 @@ class Exposure:
         Returns:
             An :class:`ExposureSeries` containing one row per time window.
         """
+        if not trajectory.has_dwell_times():
+            raise RuntimeError(
+                f"Trajectory '{trajectory.source_id}' has no dwell times. "
+                f"Call trajectory.with_dwell_times(GapMethod) before computing exposure. "
+                f"Available gap methods: "
+                f"{', '.join(m.value for m in GapMethod)}"
+            )
+
         if not self.environment.calculated:
             self.environment.calculate()
+
         effective_resolution = self._resolve_temporal_resolution(timestep)
         summary_df = self._calculate_exposure_dataframe(
             trajectory=trajectory,

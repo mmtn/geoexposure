@@ -282,4 +282,4 @@ class Environment(Cachable):
 
     def plot_reference(self, **kwargs) -> Axes:
         """Wrapper for GeoDataFrame plot method."""
-        return self.spatial_reference_data.gdf.plot(**kwargs)
+        return self.spatial_data[self.spatial_reference_data].gdf.plot(**kwargs)

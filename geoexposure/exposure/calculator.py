@@ -31,7 +31,9 @@ def _run_one(key: ScenarioKey, scenario: Scenario, output_dir: Path) -> None:
     to the path determined by ``key.to_path(output_dir)``.
 
     This is a module-level function so that it is pickleable for use with
-    :class:`~concurrent.futures.ProcessPoolExecutor`.
+    :class:`~concurrent.futures.ProcessPoolExecutor`. The code is duplicated in
+    :meth:`~exposure.scenario.Scenario.run` for convenience when calling outside
+    a parallel context.
 
     Args:
         key: Identifier for this scenario, used to determine the output path.

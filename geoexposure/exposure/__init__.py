@@ -9,10 +9,11 @@ estimates for one or more trajectories. Results are returned as
 
 from .exposure import Exposure
 from .results import ExposureSeries
-from .scenario import ScenarioBatch
+from .scenario import Scenario, ScenarioBatch
 
 __all__ = [
     "Exposure",
     "ExposureSeries",
+    "Scenario",
     "ScenarioBatch",
 ]

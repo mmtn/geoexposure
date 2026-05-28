@@ -112,6 +112,20 @@ class Trajectory:
         """Return the spatial extent of the Trajectory in x and y."""
         return self.df[X].max() - self.df[X].min(), self.df[Y].max() - self.df[Y].min()
 
+    def summary(self) -> str:
+        """Return a human-readable summary of this Trajectory."""
+        return (
+            f"Trajectory\n"
+            f"  source_id  : {self.source_id}\n"
+            f"  points     : {len(self)}\n"
+            f"  start      : {self.start_time}\n"
+            f"  end        : {self.end_time}\n"
+            f"  duration   : {self.end_time - self.start_time}\n"
+            f"  x range    : [{self.bounds[0]:.1f}, {self.bounds[1]:.1f}]\n"
+            f"  y range    : [{self.bounds[2]:.1f}, {self.bounds[3]:.1f}]\n"
+            f"  dwell times: {'True' if self.has_dwell_times() else 'False'}\n"
+        )
+
     def has_dwell_times(self) -> bool:
         """Check if dwell times have been added to this Trajectory yet."""
         missing = [
