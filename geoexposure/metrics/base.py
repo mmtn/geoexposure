@@ -11,10 +11,11 @@ cache filenames and metric naming.
 
 from __future__ import annotations
 
+import inspect
 import logging
 import re
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -40,22 +41,33 @@ class Metric(Cachable, ABC):
 
     Attributes:
         metric_title: Short identifier used in cache filenames and metric names.
-        cache_dir: Directory used for caching computed metric results.
         name: Set after calling :meth:`calculate`; identifies the metric instance.
         data: Set after calling :meth:`calculate`; holds the computed metric values.
     """
 
     metric_title = "metric"
 
-    @property
-    def cache_dir(self) -> Path:
-        """Return the cache directory for metrics, nested under the base cache directory."""
-        return super().cache_dir / "metrics"
-
     def __init__(self) -> None:
         """Initialise empty name and data attributes."""
         self.name: str | None = None
         self.data: pd.Series | None = None
+
+    def __str__(self) -> str:
+        """Return a string representation of the Metric object using subclass arg values."""
+        arg_strings = [
+            f"{name}='{value}'" if isinstance(value, str) else f"{name}={value}"
+            for name, value in self.get_args().items()
+        ]
+        return (
+            f"{type(self).__name__}("
+            f"{" ".join(arg_strings)}"
+            f")"
+        )
+
+    @property
+    def cache_dir(self) -> Path:
+        """Return the cache directory for metrics, nested under the base cache directory."""
+        return super().cache_dir / "metrics"
 
     def get_name(self, *args: object) -> str:
         """Return a string identifying this metric from its type and arguments.
@@ -81,6 +93,19 @@ class Metric(Cachable, ABC):
         ]
         arg_string = "__".join(filtered) if filtered else None
         return f"{self.metric_title}__{arg_string}" if arg_string else self.metric_title
+
+    def get_args(self) -> dict[str, Any]:
+        """Return a dictionary of argument names and values for the object.
+
+        Returns:
+            dict with argument names and associated values
+        """
+        sig = inspect.signature(self.__init__)
+        args = list(sig.parameters.values())[1:]  # drop 'self'
+        return {
+            arg.name: getattr(self, arg.name)
+            for arg in args
+        }
 
     def calculate(
             self,
