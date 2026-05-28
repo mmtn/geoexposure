@@ -13,9 +13,9 @@ import typing
 import geopandas as gpd
 import numpy as np
 
-from TrajectoryExposure.core.environment import Environment
-from TrajectoryExposure.data.trajectory import Trajectory
-from TrajectoryExposure.mobility.base import Mobility, MobilityData
+from geoexposure.core.environment import Environment
+from geoexposure.data.trajectory import Trajectory
+from geoexposure.mobility.base import Mobility, MobilityData
 
 logger = logging.getLogger(__name__)
 

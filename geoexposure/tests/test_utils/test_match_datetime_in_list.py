@@ -2,7 +2,7 @@ import datetime as dt
 
 import pytest
 
-from TrajectoryExposure.utils import REFERENCE_TIME, match_datetime_in_list
+from geoexposure.utils import REFERENCE_TIME, match_datetime_in_list
 
 # ---------------------------------------------------------------------------
 # Helpers

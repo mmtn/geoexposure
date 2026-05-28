@@ -1,0 +1,98 @@
+[project]
+name = "geoexposure"
+version = "0.1.0-beta"
+description = "Compute environmental exposure from geospatial data and trajectory data"
+readme = "README.md"
+license = { text = "AGPL-3.0-only" }
+requires-python = ">=3.12"
+authors = [
+    { name = "Martin J. Cyster" }
+]
+maintainers = [
+    { name = "Martin J. Cyster" },
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Programming Language :: Python :: 3.12",
+]
+dependencies = [
+    "numpy>=2.0,<3.0",
+    "pandas>=2.2,<3.0",
+    "scipy>=1.13,<2.0",
+    "scikit-learn>=1.5,<2.0",
+    "geopandas>=1.0,<2.0",
+    "shapely>=2.0,<3.0",
+    "matplotlib>=3.8,<4.0",
+]
+
+
+[tool.setuptools.packages.find]
+include = ["core*", "data*", "metrics*", "exposure*", "mobility*"]
+
+
+[tool.ruff]
+extend-include = ["*.ipynb"]  # To include Jupyter notebooks into checking
+fix = true
+line-length = 99  # same as black
+show-fixes = true
+
+
+[tool.ruff.lint]
+allowed-confusables = ["⨯", "α", "β", "γ", "σ"]
+
+select = [
+    "A",     # builtins
+    "ANN",   # annotations
+    "ARG",   # unused arguments
+    "ASYNC", # async checks
+    "B",     # bugbear
+    "BLE",   # blind exceptions
+    "C",     # encourage comprehensions
+    "C90",   # mccabe complexity
+    "D",     # pydocstyle
+    "E",     # pycodestyle
+    "ERA",   # remove commented-out code
+    "F",     # pyflakes
+    "FBT",   # boolean keyword arguments
+    "FIX",   # todo/fixme/hack annotations
+    "FLY",   # f-string promotion
+    "I",     # isort
+    "ISC",   # implicit string concatenation
+    "N",     # pep8-naming
+    "NPY",   # numpy
+    "PERF",  # perflint
+    "PIE",   # conciseness
+    "PL",    # pylint
+    "PT",    # pytest
+    "RET",   # return statements
+    "RUF",   # ruff
+    "S",     # bandit
+    "TCH",   # type checking
+    # "TRY", # tryceratops
+    "UP",    # pyupgrade
+    "W",     # warnings
+]
+
+ignore = [
+    "ANN002",  # Missing type annotation for *args
+    "ANN003",  # Missing type annotation for **kwargs
+]
+
+fixable = ["ALL"]
+
+exclude = [
+    ".git",
+    ".venv",
+    "__pycache__",
+    ".cache",
+    "data",
+    "test*",
+]
+
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+
+[tool.ruff.lint.per-file-ignores]
+"core/cachable.py" = ["ANN401"]

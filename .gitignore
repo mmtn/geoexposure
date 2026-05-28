@@ -5,7 +5,7 @@
 
 # Data directories
 /data
-TrajectoryExposure/tests/synthetic_data
+geoexposure/tests/synthetic_data
 
 # Cache
 .cache

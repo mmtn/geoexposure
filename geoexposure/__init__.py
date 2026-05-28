@@ -1,4 +1,4 @@
-"""TrajectoryExposure: estimating environmental exposure from GPS trajectory data.
+"""geoexposure: estimating environmental exposure from GPS trajectory data.
 
 Combines time-ordered mobility data (e.g. GPS trajectories) with geospatial
 descriptions of the local environment to compute individual-level estimates of
@@ -16,11 +16,11 @@ such as air quality, green space access, or noise exposure.
 
 Submodules
 ----------
-- :mod:`~TrajectoryExposure.core` - environment modelling, shared utilities, and caching.
-- :mod:`~TrajectoryExposure.data` - trajectory, spatial, and temporal data representations.
-- :mod:`~TrajectoryExposure.exposure` - exposure calculation and result handling.
-- :mod:`~TrajectoryExposure.metrics` - spatial metrics evaluated on raster grids.
-- :mod:`~TrajectoryExposure.mobility` - models for computing occupancy distributions.
+- :mod:`~geoexposure.core` - environment modelling, shared utilities, and caching.
+- :mod:`~geoexposure.data` - trajectory, spatial, and temporal data representations.
+- :mod:`~geoexposure.exposure` - exposure calculation and result handling.
+- :mod:`~geoexposure.metrics` - spatial metrics evaluated on raster grids.
+- :mod:`~geoexposure.mobility` - models for computing occupancy distributions.
 """
 
 from .core import datetime_utils, spatial_utils

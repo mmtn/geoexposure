@@ -2,7 +2,7 @@
 
 A :class:`Metric` transforms geospatial input data into a
 :class:`~pandas.Series` of values aligned to a raster grid, with optional
-disk caching via :class:`~TrajectoryExposure.core.cachable.Cachable`.
+disk caching via :class:`~geoexposure.core.cachable.Cachable`.
 
 Concrete subclasses must implement :meth:`Metric._calculate_metric` and
 should set :attr:`Metric.metric_title` to a descriptive identifier used in
@@ -34,7 +34,7 @@ class Metric(Cachable, ABC):
     input and raster :class:`~geopandas.GeoDataFrame` instances and returns a
     :class:`~pandas.Series` of metric values aligned to the raster grid.
 
-    Results are cached via the inherited :class:`~TrajectoryExposure.core.cachable.Cachable`
+    Results are cached via the inherited :class:`~geoexposure.core.cachable.Cachable`
     mixin using a hash derived from the input data and any metric-specific
     parameters returned by :meth:`_hash_params`.
 

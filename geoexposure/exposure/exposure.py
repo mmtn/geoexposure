@@ -1,9 +1,9 @@
 """Exposure model combining mobility and environment to estimate environmental exposure.
 
-:class:`Exposure` integrates a :class:`~TrajectoryExposure.Mobility` model with an
-:class:`~TrajectoryExposure.Environment` to compute time-windowed exposure estimates
-for one or more :class:`~TrajectoryExposure.Trajectory` instances. Results are
-returned as :class:`~TrajectoryExposure.exposure.results.ExposureSeries` objects
+:class:`Exposure` integrates a :class:`~geoexposure.Mobility` model with an
+:class:`~geoexposure.Environment` to compute time-windowed exposure estimates
+for one or more :class:`~geoexposure.Trajectory` instances. Results are
+returned as :class:`~geoexposure.exposure.results.ExposureSeries` objects
 which can be aggregated, scaled, and summarised.
 """
 

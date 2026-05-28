@@ -3,7 +3,7 @@ import datetime as dt
 
 import pytest
 
-from TrajectoryExposure.utils import REFERENCE_TIME, get_cyclic_timestamp
+from geoexposure.utils import REFERENCE_TIME, get_cyclic_timestamp
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -100,7 +100,7 @@ class TestDateInput:
         be clamped to Feb 28. We temporarily monkey-patch REFERENCE_TIME
         to a non-leap year to exercise this branch.
         """
-        from TrajectoryExposure import datetime_utils
+        from geoexposure import datetime_utils
 
         original = utils.REFERENCE_TIME
         try:
