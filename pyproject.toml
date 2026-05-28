@@ -96,4 +96,4 @@ convention = "google"
 
 
 [tool.ruff.lint.per-file-ignores]
-"core/cachable.py" = ["ANN401"]
+"geoexposure/core/cachable.py" = ["ANN401"]

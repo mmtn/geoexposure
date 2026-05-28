@@ -59,9 +59,6 @@ class SpatialData:
 
         self.gdf = gdf.copy()
         self.metrics = self._validate_metrics(metrics)
-        self._metrics_list: list[Metric] = list(self.metrics.keys())
-        self._metric_weights: list[float] = list(self.metrics.values())
-
         self.gdf_metrics: gpd.GeoDataFrame = None
         self._calculated: bool = False
 
@@ -69,13 +66,21 @@ class SpatialData:
         """Return a string representation of the SpatialData."""
         df = pd.DataFrame(
             data={
-                "metric": self._metrics_list,
-                "weight": self._metric_weights,
+                "metric": list(self.metrics.keys()),
+                "weight": list(self.metrics.values()),
             },
         )
         if df.empty:
             return "No metrics"
-        return df.to_string(index=False)
+        return (
+            "SpatialData\n"
+            f"- GeoDataFrame bounds        : {self.gdf.total_bounds}\n"
+            f"- GeoDataFrame num geometries: {len(self.gdf)}\n"
+            f"- metrics calculated                 : {self._calculated}\n"
+            "- metrics:\n"
+            f"{df.to_string(index=False)}"
+        )
+
 
     @classmethod
     def from_file(
@@ -102,12 +107,43 @@ class SpatialData:
         instance._set_data(filename, epsg)
         instance.metrics = cls._validate_metrics(metrics)
         instance.gdf_metrics = None
+        instance._calculated = False
         return instance
 
     @classmethod
     def from_interpolation(cls, a: "SpatialData", b: "SpatialData", loc: float) -> "SpatialData":
         """New instance interpolated between a and b."""
         return a.interpolate(b, loc)
+
+    def copy(self) -> "SpatialData":
+        """Return a copy of the SpatialData instance."""
+        cls = self.__class__
+        new = cls.__new__(cls)
+        new.gdf = None if self.gdf is None else self.gdf.copy()
+        new.gdf_metrics = None if self.gdf_metrics is None else self.gdf_metrics.copy()
+        new.metrics = shallow_copy(self.metrics)
+        new._calculated = self._calculated
+        return new
+
+    def interpolate(self, other: "SpatialData", loc: float) -> "SpatialData":
+        """Interpolate metrics between two instances."""
+        if loc < 0 or loc > 1:
+            raise ValueError(f"'loc' must between 0 and 1: got {loc}")
+
+        new_gdf_metrics = self.gdf_metrics[["geometry"]].copy()
+        new_metrics = {}
+
+        self_scale = 1.0 - loc
+        other_scale = loc
+        _add_interpolated_metrics(self, new_gdf_metrics, new_metrics, self_scale)
+        _add_interpolated_metrics(other, new_gdf_metrics, new_metrics, other_scale)
+
+        new = self.__class__.__new__(self.__class__)
+        new.gdf = None if self.gdf is None else self.gdf.copy()
+        new.gdf_metrics = new_gdf_metrics
+        new._calculated = True
+        new.metrics = new_metrics
+        return new
 
     @staticmethod
     def _validate_metrics(
@@ -130,22 +166,10 @@ class SpatialData:
             raise TypeError("metrics must be a dict or None")
         return metrics
 
-    def copy(self) -> "SpatialData":
-        """Return a copy of the SpatialData instance."""
-        cls = self.__class__
-        new = cls.__new__(cls)
-        new.gdf = None if self.gdf is None else self.gdf.copy()
-        new.gdf_metrics = None if self.gdf_metrics is None else self.gdf_metrics.copy()
-        new.metrics = shallow_copy(self.metrics)
-        new._metrics_list = list(new.metrics.keys())
-        new._metric_weights = list(new.metrics.values())
-        new._calculated = self._calculated
-        return new
-
     def calculate(self, gdf_raster: gpd.GeoDataFrame) -> None:
         """Compute all defined metrics."""
         self.gdf_metrics = gdf_raster.copy()
-        for metric in self._metrics_list:
+        for metric in self.metrics.keys():
             self.gdf_metrics[metric.name] = metric.calculate(self.gdf, gdf_raster)
         self._calculated = True
 
@@ -154,28 +178,6 @@ class SpatialData:
         self.gdf = gpd.GeoDataFrame.from_file(filename)
         if epsg is not None:
             self.gdf = self.gdf.to_crs(epsg=epsg)
-
-    def interpolate(self, other: "SpatialData", loc: float) -> "SpatialData":
-        """Interpolate metrics between two instances."""
-        if loc < 0 or loc > 1:
-            raise ValueError(f"'loc' must between 0 and 1: got {loc}")
-
-        new_gdf_metrics = self.gdf_metrics[["geometry"]].copy()
-        new_metrics = {}
-
-        self_scale = 1.0 - loc
-        other_scale = loc
-        _add_interpolated_metrics(self, new_gdf_metrics, new_metrics, self_scale)
-        _add_interpolated_metrics(other, new_gdf_metrics, new_metrics, other_scale)
-
-        new = self.__class__.__new__(self.__class__)
-        new.gdf = None if self.gdf is None else self.gdf.copy()
-        new.gdf_metrics = new_gdf_metrics
-        new._calculated = True
-        new.metrics = new_metrics
-        new._metrics_list = list(new.metrics.keys())
-        new._metric_weights = list(new.metrics.values())
-        return new
 
     def metric_sum(self) -> float:
         """Return the weighted sum of all metrics."""
@@ -187,8 +189,6 @@ class SpatialData:
     def set_weights(self, weights: list) -> None:
         """Assign new weightings to the metrics for this SpatialData."""
         self.metrics = dict(zip(self.metrics.keys(), weights, strict=True))
-        self._metrics_list = list(self.metrics.keys())
-        self._metric_weights = list(self.metrics.values())
 
 
 def _add_interpolated_metrics(
