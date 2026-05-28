@@ -1,14 +1,20 @@
 # Python files
-**/__pycache__
-.idea
-.venv
+**/__pycache__/
+**/*.py[cod]        # compiled .pyc / .pyo / .pyd files
+.venv/
+
+# IDEs
+.idea/
+.vscode/
 
 # Data directories
-/data
-geoexposure/tests/synthetic_data
+/data/
+tests/synthetic_data/
 
 # Cache
-.cache
+.cache/
+
+# Project-specific outputs
 /archived/
 /analysis/figure_data/
 /batch_output/
