@@ -13,7 +13,7 @@ from collections.abc import Sequence
 
 import pandas as pd
 
-from ..core import utils
+from ..core import datetime_utils
 from ..core.environment import Environment
 from ..data.columns import DATETIME
 from ..data.resampling import SamplingMethod
@@ -169,7 +169,7 @@ class Exposure:
         if end_time is None:
             end_time = trajectory.df[DATETIME].max()
 
-        windows = utils.get_time_windows(start_time, end_time, temporal_resolution)
+        windows = datetime_utils.get_time_windows(start_time, end_time, temporal_resolution)
 
         scaling = []
         durations = []
@@ -183,7 +183,7 @@ class Exposure:
         )
 
         for ii, (start, end) in enumerate(windows):
-            window = trajectory.data_in_window(
+            window = trajectory.window(
                 start=start,
                 end=end,
                 include_first=(ii == 0),  # and self.gap_method != GapMethod.IGNORE,

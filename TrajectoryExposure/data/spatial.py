@@ -39,33 +39,31 @@ class SpatialData:
 
     def __init__(
             self,
-            filename: str,
-            epsg: int | None = None,
+            gdf: gpd.GeoDataFrame,
             metrics: Mapping["Metric", int | float] | None = None,
     ) -> None:
-        """Initialise a SpatialData instance from a file.
+        """Initialise a SpatialData instance from a GeoDataFrame.
 
         Args:
-            filename: Path to a vector dataset readable by GeoPandas (e.g. Shapefile, GeoJSON).
-            epsg: EPSG code to reproject the geometry. If None, use the CRS from the input file.
-            metrics: Mapping of metric objects to their weights. If None, no metrics are attached.
+            gdf: GeoDataFrame containing the geospatial data. Must have a
+                geometry column and CRS set.
+            metrics: Mapping of metric objects to their weights. If ``None``,
+                no metrics are attached.
 
         Raises:
-            TypeError: If `metrics` is not a dict or None.
-            OSError: If the file cannot be read by GeoPandas.
-            ValueError: If the EPSG code is invalid or unsupported.
+            TypeError: If ``metrics`` is not a dict or ``None``.
+            ValueError: If ``gdf`` has no CRS set.
         """
         if not isinstance(metrics, Mapping) and metrics is not None:
             raise TypeError("metrics must be a mapping (e.g. dict) or None")
 
-        self.gdf: gpd.GeoDataFrame = None
-        self.gdf_metrics: gpd.GeoDataFrame = None
-        self._calculated: bool = False
-
-        self._set_data(filename, epsg)
-        self.metrics = metrics if metrics is not None else {}
+        self.gdf = gdf.copy()
+        self.metrics = self._validate_metrics(metrics)
         self._metrics_list: list[Metric] = list(self.metrics.keys())
         self._metric_weights: list[float] = list(self.metrics.values())
+
+        self.gdf_metrics: gpd.GeoDataFrame = None
+        self._calculated: bool = False
 
     def __str__(self) -> str:
         """Return a string representation of the SpatialData."""
@@ -80,9 +78,57 @@ class SpatialData:
         return df.to_string(index=False)
 
     @classmethod
+    def from_file(
+            cls,
+            filename: str | PathLike[str],
+            epsg: int | None = None,
+            metrics: Mapping["Metric", int | float] | None = None,
+    ) -> "SpatialData":
+        """Initialise a SpatialData instance from a file.
+
+        Args:
+            filename: Path to a vector dataset readable by GeoPandas
+                (e.g. Shapefile, GeoJSON).
+            epsg: EPSG code to reproject the geometry. If ``None``, the CRS
+                from the input file is used.
+            metrics: Mapping of metric objects to their weights. If ``None``,
+                no metrics are attached.
+
+        Raises:
+            OSError: If the file cannot be read by GeoPandas.
+            ValueError: If the EPSG code is invalid or unsupported.
+        """
+        instance = cls.__new__(cls)
+        instance._set_data(filename, epsg)
+        instance.metrics = cls._validate_metrics(metrics)
+        instance.gdf_metrics = None
+        return instance
+
+    @classmethod
     def from_interpolation(cls, a: "SpatialData", b: "SpatialData", loc: float) -> "SpatialData":
         """New instance interpolated between a and b."""
         return a.interpolate(b, loc)
+
+    @staticmethod
+    def _validate_metrics(
+            metrics: Mapping["Metric", int | float] | None,
+    ) -> Mapping["Metric", int | float]:
+        """Validate and return the metrics mapping.
+
+        Args:
+            metrics: Mapping of metric objects to weights, or ``None``.
+
+        Returns:
+            The validated mapping, or an empty dict if ``None``.
+
+        Raises:
+            TypeError: If ``metrics`` is not a dict or ``None``.
+        """
+        if metrics is None:
+            return {}
+        if not isinstance(metrics, dict):
+            raise TypeError("metrics must be a dict or None")
+        return metrics
 
     def copy(self) -> "SpatialData":
         """Return a copy of the SpatialData instance."""

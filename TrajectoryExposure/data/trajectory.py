@@ -22,7 +22,6 @@ from ..core.enums import GapMethod
 from .columns import (
     DATETIME,
     DWELL_BACKWARD,
-    DWELL_COLUMNS,
     DWELL_FORWARD,
     DWELL_TIME_SECONDS,
     REQUIRED_COLS_LIST,
@@ -143,7 +142,7 @@ class Trajectory:
 
         return all((traj_mins > ref_mins) & (traj_maxs < ref_maxs))
 
-    def with_dwells(
+    def with_dwell_times(
             self,
             gap_method: GapMethod,
             resolution: TimeDeltaLike | None = None,
@@ -161,7 +160,7 @@ class Trajectory:
         new.gap_method = gap_method
         return new
 
-    def data_in_window(
+    def window(
             self,
             start: dt.datetime,
             end: dt.datetime,
@@ -169,14 +168,33 @@ class Trajectory:
             include_first: bool = False,
             include_last: bool = False,
     ) -> "Trajectory":
-        """Returns a new Trajectory with a subset of data between the start and end times."""
-        if not self.has_dwell_times():
-            raise ValueError(
-                f"Trajectory is missing dwell time columns: {DWELL_COLUMNS}. "
-                "Call a with_*() method before windowing.",
-            )
+        """Return a new Trajectory containing only points within the time window.
+
+        If dwell times are present, they are clipped to the window boundaries so
+        that exposure is not double-counted across adjacent windows. If dwell times
+        are not present, a simple time filter is applied.
+
+        Args:
+            start: Start of the window (inclusive).
+            end: End of the window (inclusive).
+            include_first: If ``True`` and a gap method is set, always include the
+                first point of the trajectory regardless of its dwell interval.
+            include_last: If ``True`` and a gap method is set, always include the
+                last point of the trajectory regardless of its dwell interval.
+
+        Raises:
+            ValueError: If ``start`` is after ``end``.
+        """
+        if start > end:
+            raise ValueError("start of window must be before end")
 
         df = self.df.copy()
+
+        if not self.has_dwell_times():
+            mask = (df[DATETIME] >= start) & (df[DATETIME] <= end)
+            return Trajectory(df[mask].reset_index(drop=True), source_id=self.source_id)
+
+        # Dwell-aware windowing: clip dwell intervals to window boundaries
         datetimes = df[DATETIME]
         dt_backwards = pd.to_timedelta(df[DWELL_BACKWARD], unit="s")
         dt_forwards = pd.to_timedelta(df[DWELL_FORWARD], unit="s")
@@ -184,7 +202,6 @@ class Trajectory:
         interval_start = datetimes - dt_backwards
         interval_end = datetimes + dt_forwards
 
-        # Clip intervals to window bounds and compute overlap duration
         clipped_start = interval_start.clip(lower=start)
         clipped_end = interval_end.clip(upper=end)
         clipped_duration = (
@@ -200,8 +217,10 @@ class Trajectory:
         mask = (clipped_duration > 0) | df.index.isin(boundary_indices)
 
         df_mask = df[mask]
-        window = Trajectory(df=df_mask[REQUIRED_COLS_LIST])
-        window.df[DWELL_TIME_SECONDS] = clipped_duration[mask]
+        window = Trajectory(df=df_mask[REQUIRED_COLS_LIST], source_id=self.source_id)
+        window.df[DWELL_TIME_SECONDS] = clipped_duration[mask].values
+        window.df[DWELL_BACKWARD] = df_mask[DWELL_BACKWARD].values
+        window.df[DWELL_FORWARD] = df_mask[DWELL_FORWARD].values
         return window
 
     def resample(self, times: list[dt.datetime], method: SamplingMethod) -> "Trajectory":

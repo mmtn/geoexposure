@@ -1,4 +1,4 @@
-"""utils.py contains several helpful functions to perform common tasks.
+"""datetime_utils.py contains several helpful functions to perform common tasks.
 
 Functions in this file handle:
 - management of datetimes (rounding, evenly spaces time between bounds, etc).
@@ -11,10 +11,6 @@ import datetime as dt
 import logging
 from collections.abc import Sequence
 from datetime import datetime
-
-import geopandas as gpd
-import numpy as np
-from shapely import Point, Polygon
 
 logger = logging.getLogger(__name__)
 
@@ -250,113 +246,4 @@ def _match_datetime_floor(
     return match
 
 
-def rasterise(gdf: gpd.GeoDataFrame, pixel_size_metres: int | float) -> gpd.GeoDataFrame:
-    """Return a rasterised version of the input GeoDataFrame at the given resolution.
 
-    Computes a regular grid of square cells covering the bounding box of ``gdf``,
-    with cell edges aligned to multiples of ``pixel_size_metres``.
-
-    Args:
-        gdf: Input GeoDataFrame whose bounding box defines the raster extent.
-        pixel_size_metres: Edge length of each raster cell in CRS units.
-
-    Returns:
-        GeoDataFrame of square polygon cells covering the input extent, with
-        ``cx`` and ``cy`` columns for cell centroid coordinates.
-    """
-
-    def round_down(value: float, precision: float) -> float:
-        return np.floor(value / precision) * precision
-
-    def round_up(value: float, precision: float) -> float:
-        return np.ceil(value / precision) * precision
-
-    px_m = pixel_size_metres
-    gdf_x_min, gdf_y_min, gdf_x_max, gdf_y_max = gdf.total_bounds
-    crs = gdf.crs
-
-    x_min = round_down(gdf_x_min, px_m)
-    y_min = round_down(gdf_y_min, px_m)
-    x_size = round_up(gdf_x_max - gdf_x_min, px_m)
-    y_size = round_up(gdf_y_max - gdf_y_min, px_m)
-    nx = int(x_size / px_m)
-    ny = int(y_size / px_m)
-
-    logger.info(
-        f"Calculating raster at {px_m}m resolution ({nx} x {ny} = {nx * ny})",
-    )
-
-    return construct_raster_gdf(px_m, x_min, y_min, nx, ny, crs)
-
-
-
-def get_gdf_centroids(
-        gdf: gpd.GeoDataFrame, bounds: tuple[float, float, float, float] | None = None,
-) -> tuple[list[Point], np.ndarray]:
-    """Return the centroids of all geometries as list and numpy array."""
-    if bounds is not None:
-        gdf = gdf.clip(bounds)
-    centroids = gdf.geometry.centroid  # GeoSeries[Point]
-    centroids_np = np.column_stack((centroids.x.to_numpy(), centroids.y.to_numpy()))
-    return centroids, centroids_np
-
-
-def infer_raster_grid(
-        coordinates: np.ndarray,
-) -> tuple[float, float, float, int, int]:
-    """Infer raster grid parameters from centroid coordinates.
-
-    Args:
-        coordinates: Array of shape (n, 2) with columns [x, y].
-
-    Returns:
-        Tuple of (pixel_size, x_min, y_min, n_cols, n_rows).
-    """
-    x = coordinates[:, 0]
-    y = coordinates[:, 1]
-    unique_x = np.unique(x)
-    unique_y = np.unique(y)
-    pixel_size = float(np.min(np.diff(unique_x)))
-    x_min = float(unique_x.min()) - pixel_size * 0.5
-    y_min = float(unique_y.min()) - pixel_size * 0.5
-    return pixel_size, x_min, y_min, len(unique_x), len(unique_y)
-
-
-def construct_raster_gdf(
-        pixel_size: float,
-        x_min: float,
-        y_min: float,
-        nx: int,
-        ny: int,
-        crs: str,
-):
-    """Construct a regular grid GeoDataFrame from raster parameters.
-
-    Builds a grid of square polygon cells starting from ``(x_min, y_min)``,
-    with ``nx`` columns and ``ny`` rows of edge length ``pixel_size``. Centroid
-    coordinates are stored in ``cx`` and ``cy`` columns.
-
-    Args:
-        pixel_size: Edge length of each cell in CRS units.
-        x_min: Left edge of the grid in CRS units.
-        y_min: Bottom edge of the grid in CRS units.
-        nx: Number of columns.
-        ny: Number of rows.
-        crs: Coordinate reference system for the output GeoDataFrame.
-
-    Returns:
-        GeoDataFrame of square polygon cells with ``cx`` and ``cy`` centroid columns.
-    """
-    polys, cx_list, cy_list = [], [], []
-
-    for jj in range(nx):
-        for ii in range(ny):
-            x0 = x_min + pixel_size * ii
-            x1 = x0 + pixel_size
-            y0 = y_min + pixel_size * jj
-            y1 = y0 + pixel_size
-            polys.append(Polygon(((x0, y0), (x0, y1), (x1, y1), (x1, y0), (x0, y0))))
-            cx_list.append(x0 + pixel_size * 0.5)
-            cy_list.append(y0 + pixel_size * 0.5)
-
-    return gpd.GeoDataFrame({"cx": cx_list, "cy": cy_list}, geometry=polys, crs=crs)

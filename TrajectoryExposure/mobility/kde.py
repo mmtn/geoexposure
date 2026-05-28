@@ -9,7 +9,6 @@ cached to disk via the :class:`~core.cachable.Cachable` mixin.
 from __future__ import annotations
 
 import logging
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 import geopandas as gpd
@@ -19,6 +18,8 @@ from ..core.cachable import Cachable
 from ..mobility import Mobility
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from sklearn.neighbors import KernelDensity
 
     from ..core.environment import Environment

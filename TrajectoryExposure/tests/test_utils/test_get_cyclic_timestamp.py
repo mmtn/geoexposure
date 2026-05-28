@@ -100,16 +100,16 @@ class TestDateInput:
         be clamped to Feb 28. We temporarily monkey-patch REFERENCE_TIME
         to a non-leap year to exercise this branch.
         """
-        from TrajectoryExposure import utils
+        from TrajectoryExposure import datetime_utils
 
         original = utils.REFERENCE_TIME
         try:
-            utils.REFERENCE_TIME = original.replace(year=2019)
+            datetime_utils.REFERENCE_TIME = original.replace(year=2019)
             result = get_cyclic_timestamp(dt.date(2020, 2, 29), ONE_YEAR)
-            expected = utils.REFERENCE_TIME.replace(month=2, day=28)
+            expected = datetime_utils.REFERENCE_TIME.replace(month=2, day=28)
             assert result == expected
         finally:
-            utils.REFERENCE_TIME = original
+            datetime_utils.REFERENCE_TIME = original
 
 
 # ===========================================================================

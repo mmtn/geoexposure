@@ -22,6 +22,9 @@ class Cachable:
     Classes using this mixin can cache and retrieve any pickleable object
     using a hash-based key derived from arbitrary inputs.
 
+    Note that hash values may not be consistent across systems. In these cases the cache will
+    become unreliable.
+
     Attributes:
         cache_dir: Directory in which cached files are stored.
     """

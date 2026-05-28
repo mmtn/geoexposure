@@ -1,7 +1,7 @@
 """Time-windowed exposure results with aggregation and plotting utilities.
 
 :class:`ExposureSeries` stores the output of an exposure model evaluation as
-a pair of aligned DataFrames — one holding raw exposure integrals per window
+a pair of aligned DataFrames - one holding raw exposure integrals per window
 per metric, and one holding window metadata such as start time, end time, and
 temporal scaling. Methods are provided to compute rates, apply scaling,
 aggregate to coarser time grids, and plot exposure over time.
@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from ..core.utils import round_datetime
+from ..core.datetime_utils import round_datetime
 from ..data.temporal import TimeDeltaLike
 
 

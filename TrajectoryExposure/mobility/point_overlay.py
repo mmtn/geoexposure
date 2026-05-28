@@ -62,7 +62,7 @@ class PointOverlay(Mobility):
             crs=environment.crs,
         )
 
-        # Spatial join — each trajectory point is matched to the polygon it falls within
+        # Spatial join - each trajectory point is matched to the polygon it falls within
         joined = gpd.sjoin(
             trajectory_points,
             environment.gdf_raster.geometry[mask]

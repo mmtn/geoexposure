@@ -6,7 +6,7 @@ from typing import Literal
 
 import pandas as pd
 
-from ..core import utils
+from ..core import datetime_utils
 from ..core.enums import GapMethod
 from .columns import (
     DATETIME,
@@ -270,7 +270,7 @@ class IgnoredGaps(GapFiller):
         """
         start = start_time or trajectory.start_time.to_pydatetime()
         end = end_time or trajectory.end_time.to_pydatetime()
-        windows = utils.get_time_windows(start, end, resolution)
+        windows = datetime_utils.get_time_windows(start, end, resolution)
         window_length = windows[0][1] - windows[0][0]
 
         new = Trajectory(trajectory.df[REQUIRED_COLS_LIST].copy(), source_id=trajectory.source_id)

@@ -25,7 +25,7 @@ import numpy as np
 
 from ..core.enums import GapMethod
 from ..core.environment import Environment
-from ..core.utils import construct_raster_gdf, infer_raster_grid
+from ..core.spatial_utils import infer_raster_grid
 from ..data.trajectory import Trajectory
 from ..mobility.base import Mobility
 
@@ -106,7 +106,6 @@ class ScenarioKey:
         Returns:
             Full path to the result file for this scenario.
         """
-
         return (
                 base_dir
                 / self.environment
@@ -114,13 +113,12 @@ class ScenarioKey:
                 / f"{self.source_id}__{self.gap_method}__{self.timestep}.pkl"
         )
 
-    def to_str(self):
+    def to_str(self) -> str:
         """Return a single string representation of this scenario key.
 
         Returns:
-            String of the form ``"{environment}__{mobility}__{source_id}__{gap_method}__{timestep}.pkl"``.
+            String as ``"{environment}__{mobility}__{source_id}__{gap_method}__{timestep}.pkl"``.
         """
-
         return (
             f"{self.environment}__"
             f"{self.mobility}__"
@@ -174,8 +172,8 @@ class ScenarioResult:
             GeoDataFrame with one row per raster cell and a ``density`` column
             containing the normalised occupancy values.
         """
-        px, x_min, y_min, nx, ny = infer_raster_grid(self.occupancy_coordinates)
-        gdf = construct_raster_gdf(px, x_min, y_min, nx, ny, self.crs)
+        grid = infer_raster_grid(self.occupancy_coordinates)
+        gdf = grid.to_polygon_gdf(self.crs)
         gdf["density"] = self.occupancy_density.values
         return gdf
 
@@ -296,7 +294,7 @@ class ScenarioBatch:
 
     def to_product(self) -> list[tuple[ScenarioKey, Scenario]]:
         """Expand all combinations into individual Scenario instances."""
-        logger.info(f"Expanding scenarios in 'product' mode")
+        logger.info("Expanding scenarios in 'product' mode")
         return [
             (
                 ScenarioKey(
@@ -330,7 +328,7 @@ class ScenarioBatch:
         Raises:
             ValueError: If non-singular axes have different lengths.
         """
-        logger.info(f"Expanding scenarios in 'zip' mode")
+        logger.info("Expanding scenarios in 'zip' mode")
         max_axis_length = self._validate_zip_lengths()
         trajectories = _broadcast(self.trajectories, max_axis_length)
         mob_items = _broadcast(list(self.mobility_models.items()), max_axis_length)
@@ -365,7 +363,7 @@ class ScenarioBatch:
             output_dir: Path | None = None,
             mode: str = "product",
     ) -> list[ScenarioKey]:
-        """Returns a list of ScenarioResults for all Scenarios in the batch
+        """Returns a list of ScenarioResults for all Scenarios in the batch.
 
         Args:
             max_workers: the maximum number of parallel processing jobs.
@@ -462,7 +460,8 @@ def _ensure_gap_methods(
             tuple[GapMethod, dt.timedelta | None]],
 ) -> Sequence[tuple[GapMethod, dt.timedelta | None]]:
     """Wrap a single (GapMethod, resolution) pair in a list if needed."""
-    if isinstance(value, tuple) and len(value) == 2 and isinstance(value[0], GapMethod):
+    expected_len = 2
+    if isinstance(value, tuple) and len(value) == expected_len and isinstance(value[0], GapMethod):
         return [value]
     return value
 

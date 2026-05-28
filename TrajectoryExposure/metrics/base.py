@@ -14,10 +14,11 @@ from __future__ import annotations
 import logging
 import re
 from abc import ABC, abstractmethod
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     import pandas as pd
     from geopandas import GeoDataFrame
 

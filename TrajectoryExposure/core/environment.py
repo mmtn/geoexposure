@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import logging
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     import datetime as dt
     from collections.abc import Sequence
+    from pathlib import Path
 
     from matplotlib.axes import Axes
 
@@ -21,7 +21,7 @@ import pandas as pd
 from ..data.resampling import SamplingMethod
 from ..data.spatial import SpatialData
 from .cachable import Cachable
-from .utils import get_gdf_centroids, rasterise
+from .spatial_utils import get_gdf_centroids, rasterise
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +57,8 @@ class Environment(Cachable):
         self.temporal_data = temporal_data if temporal_data is not None else None
 
         self.gdf_raster = self._calculate_raster()
-        self.geometry_points, self.centroids_np = get_gdf_centroids(self.gdf_raster)
+        self.geometry_points = get_gdf_centroids(self.gdf_raster, as_numpy=False)
+        self.centroids_np = get_gdf_centroids(self.gdf_raster, as_numpy=True)
         self.crs = self.gdf_raster.crs
         self.calculated = False
 
@@ -95,12 +96,15 @@ class Environment(Cachable):
         Assumes ``metric_name`` was produced by :meth:`~metrics.base.Metric.get_name`,
         which uses the same ``__`` separator convention.
         """
-        return "__".join(["spatial", key, metric_name])
+        return f"spatial__{key}__{metric_name}"
 
     @staticmethod
     def _temporal_col(key: str) -> str:
-        """Return the column name for a temporal layer."""
-        return "__".join(["temporal", key])
+        """Return the column name for a temporal layer.
+
+        Uses ``__`` separator convention.
+        """
+        return f"temporal__{key}"
 
     def calculate(self) -> None:
         """Compute all spatial/temporal layers on the raster grid."""

@@ -7,12 +7,11 @@ geometries to a particular land cover category.
 """
 
 import logging
-import re
 
 import geopandas as gpd
 import pandas as pd
 
-from ..core.utils import get_gdf_centroids
+from ..core.spatial_utils import get_gdf_centroids
 from .base import Metric
 
 logger = logging.getLogger(__name__)
@@ -120,7 +119,7 @@ def calculate_gdf_proximity(gdf_from: gpd.GeoDataFrame, gdf_to: gpd.GeoDataFrame
     geoms_from = gdf_from.geometry
 
     if geoms_from.geom_type.isin(["Polygon", "MultiPolygon"]).all():
-        geoms_from, _ = get_gdf_centroids(gdf_from)
+        geoms_from = get_gdf_centroids(gdf_from)
         geoms_from = gpd.GeoSeries(geoms_from, name="geometry")
 
     if not geoms_from.geom_type.eq("Point").all():

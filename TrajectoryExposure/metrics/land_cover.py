@@ -6,7 +6,6 @@ receive a maximum exposure value; cells outside decay smoothly with distance
 using a Gaussian profile, reaching zero beyond a specified radius.
 """
 import logging
-import re
 
 import geopandas as gpd
 import numpy as np

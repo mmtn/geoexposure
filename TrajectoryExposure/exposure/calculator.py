@@ -39,9 +39,8 @@ def _run_one(key: ScenarioKey, scenario: Scenario, output_dir: Path) -> None:
             environment, gap method, and timestep.
         output_dir: Root directory under which the result file is written.
     """
-
     method, resolution = scenario.gap_method
-    trajectory = scenario.trajectory.with_dwells(method, resolution=resolution)
+    trajectory = scenario.trajectory.with_dwell_times(method, resolution=resolution)
     exposure = Exposure(
         mobility=scenario.mobility,
         environment=scenario.environment,
@@ -110,7 +109,6 @@ class ScenarioCalculator:
         Raises:
             ValueError: If ``mode`` is not ``"product"`` or ``"zip"``.
         """
-
         self._precalculate_environments()
 
         if mode == "product":
@@ -129,7 +127,7 @@ class ScenarioCalculator:
         else:
             self._run_parallel(scenarios)
 
-        logger.info(f"Calculation complete")
+        logger.info("Calculation complete")
         return [key for key, _ in scenarios]
 
     def _precalculate_environments(self) -> None:
@@ -166,6 +164,6 @@ class ScenarioCalculator:
                 try:
                     future.result()
                     logger.info("Completed: %s", key)
-                except Exception:  # noqa: BLE001
+                except Exception:
                     logger.exception("Failed: %s", key)
                     raise

@@ -8,8 +8,8 @@ from typing import SupportsFloat
 import numpy as np
 import pandas as pd
 
+from ..core.datetime_utils import check_iter_types, get_cyclic_timestamp, match_datetime_in_list
 from ..core.enums import SamplingMethod, TemporalType
-from ..core.utils import check_iter_types, get_cyclic_timestamp, match_datetime_in_list
 from .spatial import SpatialData
 
 logger = logging.getLogger(__name__)
@@ -22,7 +22,7 @@ class TemporalData:
     """A time-indexed series of spatial or scalar values sampled at arbitrary times.
 
     Maps a set of timestamps to either :class:`~data.spatial.SpatialData` instances
-    — representing the spatial exposure environment at different points in time —
+    - representing the spatial exposure environment at different points in time -
     or scalar ``float`` values representing a time-varying scaling factor.
 
     Supports two temporal modes via :class:`~core.enums.TemporalType`:

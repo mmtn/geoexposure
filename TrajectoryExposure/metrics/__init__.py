@@ -3,10 +3,10 @@
 This submodule provides concrete :class:`~metrics.base.Metric` implementations
 used to transform geospatial input data into per-cell exposure values:
 
-- :mod:`~metrics.proximity` — distance from each raster cell to target geometries.
-- :mod:`~metrics.land_type_exposure` — proximity-weighted exposure with Gaussian decay.
-- :mod:`~metrics.fragmentation` — patch density of a land cover category.
-- :mod:`~metrics.diversity` — Simpson Diversity Index of land cover within a neighbourhood.
+- :mod:`~metrics.proximity` - distance from each raster cell to target geometries.
+- :mod:`~metrics.land_type_exposure` - proximity-weighted exposure with Gaussian decay.
+- :mod:`~metrics.fragmentation` - patch density of a land cover category.
+- :mod:`~metrics.diversity` - Simpson Diversity Index of land cover within a neighbourhood.
 """
 
 from .base import Metric

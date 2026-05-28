@@ -2,12 +2,11 @@
 
 Computes the patch density of a specified land cover category within a
 circular neighbourhood of each raster cell. Higher values indicate greater
-fragmentation — more numerous, smaller patches of the target category within
+fragmentation - more numerous, smaller patches of the target category within
 the neighbourhood.
 """
 
 import logging
-import re
 
 import geopandas as gpd
 import pandas as pd
