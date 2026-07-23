@@ -11,12 +11,13 @@ import datetime as dt
 import logging
 from collections.abc import Sequence
 
+import numpy as np
 import pandas as pd
 
 from ..core import datetime_utils
 from ..core.environment import Environment
-from ..data.columns import DATETIME
-from ..data.gap_methods import GapMethod
+from ..data.columns import DATETIME, DWELL_BACKWARD, DWELL_FORWARD
+from ..data.gap_methods import GapMethod, VoronoiDwells
 from ..data.resampling import SamplingMethod
 from ..data.trajectory import Trajectory
 from ..exposure.results import ExposureSeries
@@ -100,7 +101,7 @@ class Exposure:
                 f"Trajectory '{trajectory.source_id}' has no dwell times. "
                 f"Call trajectory.with_dwell_times(GapMethod) before computing exposure. "
                 f"Available gap methods: "
-                f"{', '.join(m.value for m in GapMethod)}"
+                f"{', '.join(m.value for m in GapMethod)}",
             )
 
         if not self.environment.calculated:
@@ -187,42 +188,46 @@ class Exposure:
         exposure_data = []
 
         last_index = len(windows) - 1
-        logger.debug(
-            f"Computing exposure in {len(windows)} windows between {start_time} and {end_time}"
-            f" (temporal resolution: {temporal_resolution})",
-        )
+        window_sec = temporal_resolution.total_seconds()
 
-        for ii, (start, end) in enumerate(windows):
-            window = trajectory.window(
-                start=start,
-                end=end,
-                include_first=(ii == 0),  # and self.gap_method != GapMethod.IGNORE,
-                include_last=(ii == last_index),  # and self.gap_method != GapMethod.IGNORE,
+        if len(trajectory) < 2:
+            skip_start = 0
+            skip_end = last_index
+        else:
+            skip_start = int(np.floor(trajectory.df.loc[1, DWELL_BACKWARD] / window_sec))
+            skip_end = last_index - int(
+                np.floor(trajectory.df.loc[len(trajectory) - 2, DWELL_FORWARD] / window_sec)
             )
 
+        if len(windows) > 1:
+            logger.info(f"{len(windows)} time ranges (resolution: {temporal_resolution})")
+
+        for ii, (start, end) in enumerate(windows):
             length = end - start
             duration = length.total_seconds()
             centre = start + (length / 2)
-
             scaling_ii = self.environment.scaling_at_timestamp(centre, self.interp_method)
 
-            rho = self.mobility.distribution(window, self.environment)
-            normalised_density = rho.density / rho.density.sum()
+            if skip_start <= ii < skip_end:
+                window = trajectory.window(
+                    start=start,
+                    end=end,
+                    include_first=(ii == 0),
+                    include_last=(ii == last_index),
+                )
+                rho = self.mobility.distribution(window, self.environment)
+                normalised_density = rho.density / rho.density.sum()
+                exposure_sources = self.environment.sample(centre, self.interp_method)
+                sources_only = exposure_sources[self.environment.columns]
+                exposure_ii = sources_only.mul(normalised_density, axis=0) * duration
+                exposure_ii_sum = exposure_ii.sum()
+            else:
+                exposure_ii_sum = pd.Series(0.0, index=self.environment.columns)
 
-            exposure_sources = self.environment.sample(centre, self.interp_method)
-            extra_cols = [
-                col
-                for col in exposure_sources.columns
-                if col not in self.environment.columns
-            ]
-            sources_only = exposure_sources.drop(columns=extra_cols)
-
-            exposure_ii = sources_only.mul(normalised_density, axis=0) * duration
-
-            scaling.append(scaling_ii)
-            centres.append(centre)
             durations.append(duration)
-            exposure_data.append(exposure_ii.sum())
+            centres.append(centre)
+            scaling.append(scaling_ii)
+            exposure_data.append(exposure_ii_sum)
 
         window_starts, window_ends = zip(*windows, strict=True)
         summary_df = pd.DataFrame(exposure_data)
