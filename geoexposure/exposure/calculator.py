@@ -43,12 +43,8 @@ def _run_one(key: ScenarioKey, scenario: Scenario, output_dir: Path) -> None:
     """
     method, resolution = scenario.gap_method
     trajectory = scenario.trajectory.with_dwell_times(method, resolution=resolution)
-    exposure = Exposure(
-        mobility=scenario.mobility,
-        environment=scenario.environment,
-        timestep=scenario.timestep,
-    )
-    series = exposure.for_trajectory(trajectory)
+    exposure = Exposure(mobility=scenario.mobility, environment=scenario.environment)
+    series = exposure.for_trajectory(trajectory, timestep=scenario.timestep)
     occupancy = scenario.mobility.distribution(trajectory, scenario.environment)
     coords = np.column_stack([occupancy.point_geometry.x, occupancy.point_geometry.y], )
     result = ScenarioResult(
@@ -57,7 +53,7 @@ def _run_one(key: ScenarioKey, scenario: Scenario, output_dir: Path) -> None:
         exposure=series,
         occupancy_density=occupancy["density"],
         occupancy_coordinates=coords,
-        crs=occupancy.crs
+        crs=occupancy.crs,
     )
     result.save(result.key.to_path(output_dir))
 

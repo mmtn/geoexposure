@@ -244,10 +244,17 @@ class Exposure:
             timestep: dt.timedelta | None,
     ) -> dt.timedelta:
         """Resolve effective temporal resolution from argument, Exposure, or Environment."""
-        candidates = [
-            timestep,
-            self.timestep,
-            self.environment.temporal_resolution,
-        ]
+        env_resolution = self.environment.temporal_resolution
+
+        if timestep is not None:
+            if env_resolution is not None and timestep > env_resolution:
+                logger.warning(
+                    "Timestep %s is greater than temporal data resolution %s",
+                    timestep,
+                    env_resolution,
+                )
+            return timestep
+
+        candidates = [self.timestep, env_resolution]
         valid = [r for r in candidates if r is not None]
         return min(valid) if valid else None
