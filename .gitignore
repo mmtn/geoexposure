@@ -16,7 +16,7 @@ tests/synthetic_data/
 
 # Project-specific outputs
 /archived/
-/analysis/figure_data/
+/analysis/
 /batch_output/
 /figures/
 /output/
