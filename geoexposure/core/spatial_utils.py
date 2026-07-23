@@ -7,17 +7,20 @@ Classes and functions in this file handle:
 """
 
 import logging
+from pathlib import Path
 
 import attrs
 import geopandas as gpd
 import numpy as np
 from shapely import Point, Polygon
 
+from . import Cachable
+
 logger = logging.getLogger(__name__)
 
 
 @attrs.frozen
-class RasterGrid:
+class RasterGrid(Cachable):
     """Parameters defining a regular raster grid.
 
     Attributes:
@@ -33,7 +36,26 @@ class RasterGrid:
     n_rows: int
     n_cols: int
 
+    @property
+    def cache_dir(self) -> Path:
+        """Return the cache directory for environments, nested under the base cache directory."""
+        return super().cache_dir / "raster"
+
     def to_polygon_gdf(self, crs: str) -> gpd.GeoDataFrame:
+        return self._get_or_compute(
+            fn=self._to_polygon_gdf,
+            args=(crs,),
+            label="raster",
+        )
+
+    def to_point_gdf(self, crs: str) -> gpd.GeoDataFrame:
+        return self._get_or_compute(
+            fn=self._to_point_gdf,
+            args=(crs,),
+            label="raster",
+        )
+
+    def _to_polygon_gdf(self, crs: str) -> gpd.GeoDataFrame:
         """Construct a regular grid GeoDataFrame from raster parameters.
 
         Builds a grid of square polygon cells starting from using values from `grid`. Cell corner
@@ -58,8 +80,8 @@ class RasterGrid:
         )
 
         polys, cx_list, cy_list = [], [], []
-        for col in range(n_cols):
-            for row in range(n_rows):
+        for row in range(n_rows):
+            for col in range(n_cols):
                 x0 = x_min + px * col
                 y0 = y_min + px * row
                 x1 = x0 + px
@@ -70,7 +92,7 @@ class RasterGrid:
 
         return gpd.GeoDataFrame({"cx": cx_list, "cy": cy_list}, geometry=polys, crs=crs)
 
-    def to_point_gdf(self, crs: str) -> gpd.GeoDataFrame:
+    def _to_point_gdf(self, crs: str) -> gpd.GeoDataFrame:
         """Construct a GeoDataFrame of centroid points covering the grid.
 
         Args:
@@ -181,5 +203,3 @@ def infer_raster_grid(coordinates: np.ndarray) -> RasterGrid:
         n_rows=len(unique_y),
         n_cols=len(unique_x),
     )
-
-
