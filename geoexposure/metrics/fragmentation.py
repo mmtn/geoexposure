@@ -83,9 +83,10 @@ class Fragmentation(Metric):
         """
         gdf_input["geometry"] = gdf_input.geometry.buffer(0)  # quick fix for invalid geometries
         gdf_to = gdf_input[gdf_input[self.column] == self.value]
-        return pd.Series(
+        series = pd.Series(
             [patch_density(gdf_to, polygon, self.radius) for polygon in gdf_raster["geometry"]],
         )
+        return series / series.max()  # Normalise by maximum so values are in the range 0-1
 
 
 def patch_density(
@@ -116,18 +117,14 @@ def patch_density(
     """
     patch_center = patch.centroid
     circle = patch_center.buffer(r)
-    window_area = circle.area
     mask = gpd.GeoDataFrame(geometry=[circle], crs=gdf.crs)
     clipped = gdf.clip(mask)
 
     # Proportion of the window covered by the chosen subset
-    # i.e. where gdf_input[self.column] == self.value
-    focal_union = clipped.union_all()
-    coverage = focal_union.area / window_area
+    coverage = clipped.union_all().area / circle.area
 
     # Fragmentation is zero if area has ZERO or ONLY polygons of the chosen type
     if coverage < tolerance or coverage > 1.0 - tolerance:
         return 0.0
 
-    num_patches = len(clipped.explode(index_parts=False))
-    return num_patches / window_area
+    return len(clipped.explode(index_parts=False))

@@ -81,6 +81,13 @@ class Trajectory:
         source_id = path.name if source_id is None else source_id
         return cls(df, source_id=source_id)
 
+    @classmethod
+    def _empty_trajectory(cls, df: pd.DataFrame, source_id: str | None = None) -> "Trajectory":
+        full = cls(df, source_id)
+        empty = full.copy()
+        empty.df = pd.DataFrame({}, columns=full.df.columns)
+        return empty
+
     @property
     def start_time(self) -> pd.Timestamp:
         """Return the first listed time in this Trajectory."""
@@ -231,6 +238,10 @@ class Trajectory:
         mask = (clipped_duration > 0) | df.index.isin(boundary_indices)
 
         df_mask = df[mask]
+
+        if len(df_mask) == 0:
+            return self._empty_trajectory(df, self.source_id)
+
         window = Trajectory(df=df_mask[REQUIRED_COLS_LIST], source_id=self.source_id)
         window.df[DWELL_TIME_SECONDS] = clipped_duration[mask].values
         window.df[DWELL_BACKWARD] = df_mask[DWELL_BACKWARD].values

@@ -169,7 +169,7 @@ class ScenarioResult:
     """The result of a single scenario evaluation.
 
     Stores the exposure series, occupancy distribution, and metadata needed to reconstruct and
-    inspect the result. Can be save and loaded from disk using :meth:`save` and :meth:`load`.
+    inspect the result. Can be saved and loaded from disk using :meth:`save` and :meth:`load`.
 
     Attributes:
         key: The :class:`ScenarioKey` identifying this result.
@@ -197,6 +197,11 @@ class ScenarioResult:
         """Load a ScenarioResult from disk."""
         with open(path, "rb") as f:
             return pickle.load(f)  # noqa: S301
+
+    @classmethod
+    def load_from_key(cls, key: ScenarioKey, output_dir: str | Path):
+        path = key.to_path(Path(output_dir))
+        return cls.load(path)
 
     def occupancy_gdf(self) -> "gpd.GeoDataFrame":
         """Reconstruct the occupancy distribution as a GeoDataFrame.

@@ -64,7 +64,7 @@ class Environment(Cachable):
 
         self.temporal_resolution = (
             None if self.temporal_data is None
-            else np.min(data.temporal_resolution for data in self.temporal_data.values())
+            else min(data.temporal_resolution for data in self.temporal_data.values())
         )
 
     def __str__(self) -> str:
@@ -136,11 +136,6 @@ class Environment(Cachable):
             self._spatial_col(key, metric.name)
             for key, spatial in self.spatial_data.items()
             for metric in spatial.metrics.keys()
-        )
-
-        columns.extend(
-            self._temporal_col(key)
-            for key in temporal_data.keys()
         )
 
         return columns

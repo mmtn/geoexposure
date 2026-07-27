@@ -9,14 +9,14 @@
 
 # Data directories
 /data/
-tests/synthetic_data/
 
 # Cache
 .cache/
 
 # Project-specific outputs
 /archived/
-/analysis/figure_data/
+/analysis/
 /batch_output/
+/examples/batch_output_example/
 /figures/
 /output/

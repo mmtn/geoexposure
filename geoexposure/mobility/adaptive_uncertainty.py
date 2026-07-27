@@ -24,32 +24,20 @@ class AdaptiveUncertainty(Mobility):
     """Time-integrated 2D Gaussian density field from observed positions."""
 
     @typing.override
-    def __init__(
-            self,
-            sigma0: float,
-            v: float,
-            k: float,
-            timestep: dt.timedelta,
-            eps: float = 1e-6,
-            sigma_min: float = 4.0,
-    ) -> None:
+    def __init__(self, sigma0: float, v: float, timestep: dt.timedelta, eps: float = 1e-6) -> None:
         """Initialises the Gaussian density model with uncertainty parameters.
 
         Args:
             sigma0: Base positional uncertainty.
             v: Speed parameter for uncertainty growth.
-            k: Scaling factor for uncertainty growth.
             timestep: Time step size for trapezoidal integration.
             eps: Numerical safety floor for variance.
-            sigma_min: Minimum standard deviation for visualisation.
         """
         super().__init__()
         self.sigma0 = sigma0
         self.v = v
-        self.k = k
         self.timestep = timestep
         self.eps = eps
-        self.sigma_min = sigma_min
 
     @staticmethod
     def _mean_position(
@@ -105,6 +93,28 @@ class AdaptiveUncertainty(Mobility):
         dt_next = (time_values[i + 1] - t).total_seconds()
         return min(dt_prev, dt_next)
 
+    @staticmethod
+    def _delta_x_eff(
+            mu_x,
+            mu_y,
+            t: dt.datetime,
+            data: MobilityData,
+    ) -> float:
+        """Compute effective time to the nearest observation in seconds.
+
+        This is the minimum of time since the previous observation and time until
+        the next observation. It is defined as 0 outside the observed time range.
+        """
+        if t <= data.t[0] or t >= data.t[-1]:
+            return 0.0
+
+        i = np.searchsorted(data.t, t, side="right") - 1
+        x_prev, x_next = data.x[i], data.x[i + 1]
+        y_prev, y_next = data.y[i], data.y[i + 1]
+        distance_prev = np.sqrt((mu_x - x_prev)**2 + (mu_y - y_prev)**2)
+        distance_next = np.sqrt((mu_x - x_next)**2 + (mu_y - y_next)**2)
+        return min(distance_prev, distance_next)
+
     def _instantaneous_density(
             self,
             t: dt.datetime,
@@ -125,10 +135,13 @@ class AdaptiveUncertainty(Mobility):
         """
         mu_x, mu_y = self._mean_position(t, data.x, data.y, data.t)
         dt_eff = self._delta_t_eff(t, data.t)
+        dx_eff = self._delta_x_eff(mu_x, mu_y, t, data)
 
-        sigma2 = self.sigma0 ** 2 + (self.v * dt_eff / self.k) ** 2
+        intrinsic = self.sigma0
+        adaptive = max(0.0, (self.v * dt_eff) - dx_eff)
+
+        sigma2 = intrinsic**2 + adaptive**2
         sigma2 = max(sigma2, self.eps)
-        sigma2 = max(sigma2, self.sigma_min ** 2)
 
         r2 = (eval_x - mu_x) ** 2 + (eval_y - mu_y) ** 2
         norm = 1.0 / (2.0 * np.pi * sigma2)
