@@ -9,7 +9,6 @@
 
 # Data directories
 /data/
-tests/synthetic_data/
 
 # Cache
 .cache/
@@ -18,5 +17,6 @@ tests/synthetic_data/
 /archived/
 /analysis/
 /batch_output/
+/examples/batch_output_example/
 /figures/
 /output/

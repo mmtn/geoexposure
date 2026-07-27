@@ -188,16 +188,20 @@ class Exposure:
         exposure_data = []
 
         last_index = len(windows) - 1
-        window_sec = temporal_resolution.total_seconds()
+
+        if temporal_resolution is None:
+            window_sec = (end_time - start_time).total_seconds()
+        else:
+            window_sec = temporal_resolution.total_seconds()
 
         if len(trajectory) < 2:
             skip_start = 0
-            skip_end = last_index
+            skip_end = max(1, last_index)
         else:
-            skip_start = int(np.floor(trajectory.df.loc[1, DWELL_BACKWARD] / window_sec))
-            skip_end = last_index - int(
-                np.floor(trajectory.df.loc[len(trajectory) - 2, DWELL_FORWARD] / window_sec)
-            )
+            last_point_dwell_forward = trajectory.df.loc[len(trajectory) - 2, DWELL_FORWARD]
+            first_point_dwell_backward = trajectory.df.loc[1, DWELL_BACKWARD]
+            skip_start = int(np.floor(first_point_dwell_backward / window_sec))
+            skip_end = max(1, last_index - int(np.floor(last_point_dwell_forward / window_sec)))
 
         if len(windows) > 1:
             logger.info(f"{len(windows)} time ranges (resolution: {temporal_resolution})")
