@@ -102,7 +102,7 @@ class TestDateInput:
         """
         from geoexposure import datetime_utils
 
-        original = utils.REFERENCE_TIME
+        original = datetime_utils.REFERENCE_TIME
         try:
             datetime_utils.REFERENCE_TIME = original.replace(year=2019)
             result = get_cyclic_timestamp(dt.date(2020, 2, 29), ONE_YEAR)

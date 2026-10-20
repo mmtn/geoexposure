@@ -199,7 +199,8 @@ class ScenarioResult:
             return pickle.load(f)  # noqa: S301
 
     @classmethod
-    def load_from_key(cls, key: ScenarioKey, output_dir: str | Path):
+    def load_from_key(cls, key: ScenarioKey, output_dir: str | Path) -> "ScenarioResult":
+        """Load a ScenarioResult from a path reconstructed from the provided ScenarioKey."""
         path = key.to_path(Path(output_dir))
         return cls.load(path)
 

@@ -95,8 +95,8 @@ class AdaptiveUncertainty(Mobility):
 
     @staticmethod
     def _delta_x_eff(
-            mu_x,
-            mu_y,
+            mu_x: float | int,
+            mu_y: float | int,
             t: dt.datetime,
             data: MobilityData,
     ) -> float:
