@@ -17,7 +17,7 @@ import pandas as pd
 from ..core import datetime_utils
 from ..core.environment import Environment
 from ..data.columns import DATETIME, DWELL_BACKWARD, DWELL_FORWARD
-from ..data.gap_methods import GapMethod, VoronoiDwells
+from ..data.gap_methods import GapMethod
 from ..data.resampling import SamplingMethod
 from ..data.trajectory import Trajectory
 from ..exposure.results import ExposureSeries
@@ -194,7 +194,7 @@ class Exposure:
         else:
             window_sec = temporal_resolution.total_seconds()
 
-        if len(trajectory) < 2:
+        if len(trajectory) == 1:
             skip_start = 0
             skip_end = max(1, last_index)
         else:

@@ -25,6 +25,7 @@ from .spatial_utils import get_gdf_centroids, rasterise
 
 logger = logging.getLogger(__name__)
 
+
 class Environment(Cachable):
     """Spatial/temporal exposure sources sampled on a fixed raster."""
 
@@ -129,7 +130,6 @@ class Environment(Cachable):
     @property
     def columns(self) -> Sequence[str]:
         """Return column names produced by `sample()` (excluding geometry)."""
-        temporal_data = self.temporal_data if self.temporal_data is not None else {}
         columns: list[str] = []
 
         columns.extend(

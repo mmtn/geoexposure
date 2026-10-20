@@ -42,6 +42,7 @@ class RasterGrid(Cachable):
         return super().cache_dir / "raster"
 
     def to_polygon_gdf(self, crs: str) -> gpd.GeoDataFrame:
+        """Return a GeoDataFrame on a regular grid with polygon geometries."""
         return self._get_or_compute(
             fn=self._to_polygon_gdf,
             args=(crs,),
@@ -49,6 +50,7 @@ class RasterGrid(Cachable):
         )
 
     def to_point_gdf(self, crs: str) -> gpd.GeoDataFrame:
+        """Return a GeoDataFrame on a regular grid with point geometries."""
         return self._get_or_compute(
             fn=self._to_point_gdf,
             args=(crs,),

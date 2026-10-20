@@ -14,6 +14,9 @@ maintainers = [
 classifiers = [
     "Development Status :: 4 - Beta",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Programming Language :: Python :: 3.15",
 ]
 dependencies = [
     "numpy>=2.0,<3.0",
@@ -23,24 +26,30 @@ dependencies = [
     "geopandas>=1.0,<2.0",
     "shapely>=2.0,<3.0",
     "matplotlib>=3.8,<4.0",
+    "attrs>=25.01.0,<26.1.0"
 ]
 
+[dependency-groups]
+dev = [
+    "pytest",
+    "ruff",
+]
+
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["geoexposure*"]
 
-
 [tool.ruff]
 extend-include = ["*.ipynb"]  # To include Jupyter notebooks into checking
-fix = true
 line-length = 99  # same as black
 show-fixes = true
 
-
 [tool.ruff.lint]
 allowed-confusables = ["⨯", "α", "β", "γ", "σ"]
-
 select = [
     "A",     # builtins
     "ANN",   # annotations
@@ -69,18 +78,17 @@ select = [
     "RUF",   # ruff
     "S",     # bandit
     "TCH",   # type checking
-    # "TRY", # tryceratops
+    "TRY",   # tryceratops
     "UP",    # pyupgrade
     "W",     # warnings
 ]
-
 ignore = [
     "ANN002",  # Missing type annotation for *args
     "ANN003",  # Missing type annotation for **kwargs
+    "FIX002",  # Allow TODO items
+    "TRY",     # Skip ruff's opinions on the use of try-except for now
 ]
-
 fixable = ["ALL"]
-
 exclude = [
     ".git",
     ".venv",
@@ -90,10 +98,8 @@ exclude = [
     "test*",
 ]
 
-
 [tool.ruff.lint.pydocstyle]
 convention = "google"
-
 
 [tool.ruff.lint.per-file-ignores]
 "geoexposure/core/cachable.py" = ["ANN401"]
